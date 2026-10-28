@@ -1,0 +1,107 @@
+"use client";
+
+import Link from "next/link";
+import { useActionState, useState } from "react";
+import { indicarEmpresa } from "@/acoes/empresas";
+import { Aviso } from "@/components/Aviso";
+import { BotaoEnviar } from "@/components/BotaoEnviar";
+import { enviarSemLimpar } from "@/components/envio";
+import { Campo } from "@/components/Campo";
+import { SeletorCausas } from "@/components/SeletorCausas";
+import { CATEGORIAS, UFS } from "@/lib/dominio";
+
+export function FormIndicar() {
+  const [estado, acao, pendente] = useActionState(indicarEmpresa, undefined);
+  const erros = estado?.erros ?? {};
+  const valores = estado?.valores ?? {};
+  const valor = (campo: string) => (typeof valores[campo] === "string" ? (valores[campo] as string) : "");
+  const causas = Array.isArray(valores.causas) ? valores.causas : [];
+  const [souDono, setSouDono] = useState(valor("souDono") === "sim");
+
+  return (
+    <form action={acao} onSubmit={enviarSemLimpar(acao)} className="cartao space-y-6 p-6 sm:p-8">
+      <label className="flex cursor-pointer items-start gap-3 rounded-2xl bg-papel p-4">
+        <input
+          type="checkbox"
+          name="souDono"
+          value="sim"
+          checked={souDono}
+          onChange={(e) => setSouDono(e.target.checked)}
+          className="mt-1 h-4 w-4 accent-coral"
+        />
+        <span>
+          <span className="block font-medium">Este negócio é meu</span>
+          <span className="block text-sm text-suave">
+            Depois de cadastrar, você confirma que controla o Instagram e já pode editar o perfil.
+          </span>
+        </span>
+      </label>
+
+      <Campo rotulo="@ do Instagram" erro={erros.instagram} id="instagram">
+        <div className="relative">
+          <span className="pointer-events-none absolute inset-y-0 left-4 flex items-center text-suave">@</span>
+          <input id="instagram" name="instagram" required maxLength={80} placeholder="padariadobairro" defaultValue={valor("instagram")} className="campo pl-8" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
+        </div>
+      </Campo>
+      {estado?.existente && (
+        <p className="-mt-3 text-sm">
+          <Link href={`/empresas/${estado.existente}`} className="link">
+            Ver o perfil de @{estado.existente} →
+          </Link>
+        </p>
+      )}
+
+      <Campo rotulo="Nome do negócio" erro={erros.nome} id="nome">
+        <input id="nome" name="nome" required maxLength={80} defaultValue={valor("nome")} className="campo" />
+      </Campo>
+
+      <div className="grid gap-4 sm:grid-cols-[1fr_1fr_7rem]">
+        <Campo rotulo="Categoria" erro={erros.categoria} id="categoria">
+          <select id="categoria" name="categoria" required defaultValue={valor("categoria")} className="campo">
+            <option value="" disabled>
+              Escolha…
+            </option>
+            {CATEGORIAS.map((c) => (
+              <option key={c}>{c}</option>
+            ))}
+          </select>
+        </Campo>
+        <Campo rotulo="Cidade" erro={erros.cidade} id="cidade">
+          <input id="cidade" name="cidade" required maxLength={60} defaultValue={valor("cidade")} className="campo" />
+        </Campo>
+        <Campo rotulo="Estado" erro={erros.uf} id="uf">
+          <select id="uf" name="uf" required defaultValue={valor("uf")} className="campo">
+            <option value="" disabled>
+              UF
+            </option>
+            {UFS.map((uf) => (
+              <option key={uf}>{uf}</option>
+            ))}
+          </select>
+        </Campo>
+      </div>
+
+      <Campo rotulo="Em uma frase, o que este negócio faz?" erro={erros.resumo} id="resumo" ajuda="Até 160 caracteres.">
+        <input id="resumo" name="resumo" required maxLength={160} placeholder="Padaria artesanal que contrata gente do próprio bairro" defaultValue={valor("resumo")} className="campo" />
+      </Campo>
+
+      {!souDono && (
+        <Campo rotulo="Por que você indica? (opcional)" erro={erros.motivo} id="motivo" ajuda="Aparece no perfil até o dono contar a própria história.">
+          <textarea id="motivo" name="motivo" rows={3} maxLength={600} defaultValue={valor("motivo")} className="campo" />
+        </Campo>
+      )}
+
+      <div>
+        <p className="rotulo">Quais causas este negócio abraça?</p>
+        <p className="ajuda mt-0 mb-3">Marque só o que você sabe que é verdade. O dono pode ajustar depois.</p>
+        <SeletorCausas selecionadas={causas} />
+      </div>
+
+      {estado?.erro && <Aviso tipo="erro">{estado.erro}</Aviso>}
+
+      <BotaoEnviar pendente={pendente} className="botao-coral w-full py-3 text-base" enviando="Enviando…">
+        {souDono ? "Cadastrar e verificar meu negócio" : "Enviar indicação"}
+      </BotaoEnviar>
+    </form>
+  );
+}

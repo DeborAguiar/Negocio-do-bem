@@ -1,0 +1,135 @@
+"use client";
+
+import { useActionState, useState } from "react";
+import { salvarEmpresa } from "@/acoes/empresas";
+import { Aviso } from "@/components/Aviso";
+import { BotaoEnviar } from "@/components/BotaoEnviar";
+import { enviarSemLimpar } from "@/components/envio";
+import { Campo } from "@/components/Campo";
+import { Historia } from "@/components/Historia";
+import { SeletorCausas } from "@/components/SeletorCausas";
+import { CATEGORIAS, UFS } from "@/lib/dominio";
+
+type DadosEmpresa = {
+  id: string;
+  nome: string;
+  resumo: string;
+  categoria: string;
+  cidade: string;
+  uf: string;
+  site: string;
+  historia: string;
+  causas: string[];
+};
+
+export function FormEmpresa({ empresa }: { empresa: DadosEmpresa }) {
+  const [estado, acao, pendente] = useActionState(salvarEmpresa, undefined);
+  const erros = estado?.erros ?? {};
+  const valores = estado?.valores;
+  const valor = (campo: keyof DadosEmpresa) => {
+    const v = valores?.[campo];
+    return typeof v === "string" ? v : String(empresa[campo]);
+  };
+  const causas = Array.isArray(valores?.causas) ? valores.causas : empresa.causas;
+  const [historia, setHistoria] = useState(empresa.historia);
+  const [aba, setAba] = useState<"escrever" | "ver">("escrever");
+
+  return (
+    <form action={acao} onSubmit={enviarSemLimpar(acao)} className="space-y-8">
+      <input type="hidden" name="empresaId" value={empresa.id} />
+
+      <section className="cartao space-y-5 p-6 sm:p-8">
+        <h2 className="font-serif text-2xl font-semibold">Informações</h2>
+        <Campo id="nome" rotulo="Nome do negócio" erro={erros.nome}>
+          <input id="nome" name="nome" required maxLength={80} defaultValue={valor("nome")} className="campo" />
+        </Campo>
+        <Campo id="resumo" rotulo="Em uma frase" erro={erros.resumo} ajuda="Aparece nos cards do diretório. Até 160 caracteres.">
+          <input id="resumo" name="resumo" required maxLength={160} defaultValue={valor("resumo")} className="campo" />
+        </Campo>
+        <div className="grid gap-4 sm:grid-cols-[1fr_1fr_7rem]">
+          <Campo id="categoria" rotulo="Categoria" erro={erros.categoria}>
+            <select id="categoria" name="categoria" defaultValue={valor("categoria")} className="campo">
+              {CATEGORIAS.map((c) => (
+                <option key={c}>{c}</option>
+              ))}
+            </select>
+          </Campo>
+          <Campo id="cidade" rotulo="Cidade" erro={erros.cidade}>
+            <input id="cidade" name="cidade" required maxLength={60} defaultValue={valor("cidade")} className="campo" />
+          </Campo>
+          <Campo id="uf" rotulo="Estado" erro={erros.uf}>
+            <select id="uf" name="uf" defaultValue={valor("uf")} className="campo">
+              {UFS.map((uf) => (
+                <option key={uf}>{uf}</option>
+              ))}
+            </select>
+          </Campo>
+        </div>
+        <Campo id="site" rotulo="Site (opcional)" erro={erros.site}>
+          <input id="site" name="site" maxLength={200} placeholder="www.meunegocio.com.br" defaultValue={valor("site")} className="campo" />
+        </Campo>
+      </section>
+
+      <section className="cartao space-y-4 p-6 sm:p-8">
+        <div>
+          <h2 className="font-serif text-2xl font-semibold">Causas que vocês abraçam</h2>
+          <p className="mt-1 text-sm text-suave">Elas viram selos no perfil e filtros na busca. Marque só o que é verdade no dia a dia.</p>
+        </div>
+        <SeletorCausas key={causas.join()} selecionadas={causas} />
+      </section>
+
+      <section className="cartao p-6 sm:p-8">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="font-serif text-2xl font-semibold">Nossa história</h2>
+            <p className="mt-1 text-sm text-suave">Como tudo começou, o que move vocês, quem faz acontecer.</p>
+          </div>
+          <div className="flex rounded-full bg-papel p-1 text-sm" role="tablist">
+            {(["escrever", "ver"] as const).map((opcao) => (
+              <button
+                key={opcao}
+                type="button"
+                role="tab"
+                aria-selected={aba === opcao}
+                onClick={() => setAba(opcao)}
+                className={`rounded-full px-4 py-1.5 font-medium transition ${aba === opcao ? "bg-white shadow-sm" : "text-suave"}`}
+              >
+                {opcao === "escrever" ? "Escrever" : "Pré-visualizar"}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <textarea
+          name="historia"
+          value={historia}
+          onChange={(e) => setHistoria(e.target.value)}
+          rows={18}
+          maxLength={20000}
+          aria-label="Nossa história"
+          placeholder={"Tudo começou na cozinha da minha avó…\n\n## O que nos move\n\nAcreditamos que…"}
+          className={`campo mt-5 resize-y font-serif text-lg leading-relaxed ${aba === "escrever" ? "" : "hidden"}`}
+        />
+        {aba === "ver" && (
+          <div className="mt-5 min-h-48 rounded-2xl border border-linha p-6">
+            {historia.trim() ? <Historia markdown={historia} /> : <p className="text-suave italic">Nada escrito ainda.</p>}
+          </div>
+        )}
+        {erros.historia && <p className="erro-campo">{erros.historia}</p>}
+        <p className="ajuda">
+          Dicas: <code>## Título</code> cria um intertítulo, <code>**texto**</code> deixa em negrito, <code>&gt; frase</code> vira
+          citação e uma linha com <code>---</code> separa capítulos.
+        </p>
+      </section>
+
+      {estado?.erro && <Aviso tipo="erro">{estado.erro}</Aviso>}
+      {estado?.erros && Object.keys(estado.erros).length > 0 && <Aviso tipo="erro">Confira os campos destacados acima.</Aviso>}
+
+      <div className="sticky bottom-4 z-10 flex justify-end">
+        <BotaoEnviar pendente={pendente} className="botao-coral px-8 py-3 text-base shadow-lg shadow-coral/20" enviando="Salvando…">
+          Salvar alterações
+        </BotaoEnviar>
+      </div>
+    </form>
+  );
+}

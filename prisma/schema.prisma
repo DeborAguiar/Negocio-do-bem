@@ -1,0 +1,177 @@
+// Esquema do banco do Negócio do Bem.
+// Os campos de "status" são texto (e não enum) para manter o esquema simples
+// de evoluir; os valores aceitos estão documentados em cada campo e em
+// src/lib/dominio.ts.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Usuario {
+  id        String   @id @default(cuid())
+  nome      String
+  email     String   @unique
+  senhaHash String
+  // "membro" | "moderador"
+  papel     String   @default("membro")
+  criadoEm  DateTime @default(now())
+
+  sessoes             Sessao[]
+  indicacoes          Empresa[]        @relation("IndicadaPor")
+  depoimentos         Depoimento[]     @relation("AutorDepoimento")
+  denuncias           Depoimento[]     @relation("DenunciadoPor")
+  empresas            EmpresaMembro[]
+  reivindicacoes      Reivindicacao[]  @relation("Solicitante")
+  revisoes            Reivindicacao[]  @relation("Revisor")
+  registrosAuditoria  RegistroAuditoria[]
+}
+
+model Sessao {
+  // sha256 do token guardado no cookie: quem lê o banco não consegue se passar pelo usuário
+  id        String   @id
+  usuarioId String
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  expiraEm  DateTime
+  criadoEm  DateTime @default(now())
+
+  @@index([usuarioId])
+}
+
+model Empresa {
+  id                String   @id @default(cuid())
+  // @ atual do Instagram, minúsculo e sem "@". Também é o endereço da página.
+  instagramUsername String   @unique
+  // ID fixo da conta profissional, obtido no "Entrar com Instagram".
+  instagramUserId   String?  @unique
+  // ID da conta no escopo do nosso perfil (IGSID), obtido quando o dono manda DM.
+  instagramIgsid    String?  @unique
+  nome              String
+  resumo            String
+  historia          String   @default("")
+  categoria         String
+  cidade            String
+  uf                String
+  site              String?
+  // "indicada" (sem dono) | "verificada" (tem dono que provou controlar o @)
+  status            String   @default("indicada")
+  // "pendente" | "aprovada" | "rejeitada" — só "aprovada" aparece no diretório
+  moderacao         String   @default("pendente")
+  // O dono pode tirar o negócio do diretório a qualquer momento.
+  oculta            Boolean  @default(false)
+  motivoIndicacao   String?
+  indicadaPorId     String?
+  indicadaPor       Usuario? @relation("IndicadaPor", fields: [indicadaPorId], references: [id], onDelete: SetNull)
+  // Texto normalizado (minúsculo, sem acento) usado na busca.
+  busca             String   @default("")
+  criadoEm          DateTime @default(now())
+  atualizadoEm      DateTime @updatedAt
+
+  causas         EmpresaCausa[]
+  depoimentos    Depoimento[]
+  membros        EmpresaMembro[]
+  reivindicacoes Reivindicacao[]
+
+  @@index([moderacao, oculta, status])
+  @@index([uf])
+}
+
+model EmpresaCausa {
+  empresaId String
+  empresa   Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  // slug de uma causa definida em src/lib/causas.ts
+  causa     String
+
+  @@id([empresaId, causa])
+  @@index([causa])
+}
+
+model EmpresaMembro {
+  empresaId String
+  empresa   Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  usuarioId String
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  // "dono"
+  papel     String   @default("dono")
+  criadoEm  DateTime @default(now())
+
+  @@id([empresaId, usuarioId])
+  @@index([usuarioId])
+}
+
+model Reivindicacao {
+  id              String    @id @default(cuid())
+  empresaId       String
+  empresa         Empresa   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  usuarioId       String
+  usuario         Usuario   @relation("Solicitante", fields: [usuarioId], references: [id], onDelete: Cascade)
+  // "instagram_login" | "codigo_dm" | "documento"
+  metodo          String
+  // Código que o dono envia por DM (só no método "codigo_dm").
+  codigo          String?   @unique
+  // "pendente" | "aprovada" | "recusada" | "expirada" | "cancelada"
+  status          String    @default("pendente")
+  // Método "documento"
+  cnpj            String?
+  relacao         String?
+  contato         String?
+  mensagem        String?
+  // Anotações do sistema para a moderação (ex.: "DM recebida de @outra_conta").
+  notas           String    @default("")
+  // Motivo informado pela moderação ao recusar.
+  motivoRecusa    String?
+  // IDs do Instagram capturados durante a verificação.
+  instagramUserId String?
+  instagramIgsid  String?
+  expiraEm        DateTime
+  revisadoPorId   String?
+  revisadoPor     Usuario?  @relation("Revisor", fields: [revisadoPorId], references: [id], onDelete: SetNull)
+  revisadoEm      DateTime?
+  criadoEm        DateTime  @default(now())
+
+  @@index([empresaId, status])
+  @@index([usuarioId, criadoEm])
+  @@index([status, criadoEm])
+}
+
+model Depoimento {
+  id              String    @id @default(cuid())
+  empresaId       String
+  empresa         Empresa   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  autorId         String
+  autor           Usuario   @relation("AutorDepoimento", fields: [autorId], references: [id], onDelete: Cascade)
+  texto           String
+  resposta        String?
+  respondidoEm    DateTime?
+  // "publicado" | "removido"
+  status          String    @default("publicado")
+  // Uma denúncia não esconde o depoimento: só a moderação decide.
+  denunciado      Boolean   @default(false)
+  motivoDenuncia  String?
+  denunciadoPorId String?
+  denunciadoPor   Usuario?  @relation("DenunciadoPor", fields: [denunciadoPorId], references: [id], onDelete: SetNull)
+  criadoEm        DateTime  @default(now())
+
+  @@unique([empresaId, autorId])
+  @@index([empresaId, status, criadoEm])
+  @@index([denunciado])
+}
+
+model RegistroAuditoria {
+  id        String   @id @default(cuid())
+  // null quando a ação foi automática (ex.: webhook do Instagram)
+  usuarioId String?
+  usuario   Usuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+  acao      String
+  alvoTipo  String
+  alvoId    String
+  detalhes  String?
+  criadoEm  DateTime @default(now())
+
+  @@index([criadoEm])
+  @@index([alvoTipo, alvoId])
+}

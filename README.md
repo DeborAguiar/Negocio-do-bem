@@ -1,0 +1,118 @@
+# Negócio do Bem
+
+Um diretório de negócios com consciência social e conexão com a comunidade. As pessoas encontram negócios que compartilham dos seus valores, indicam quem admiram e deixam depoimentos. Os donos assumem o perfil pelo @ do Instagram e contam a própria história.
+
+- **Diretório** com busca (sem diferenciar acentos) e filtros por causa e estado.
+- **Perfis** com a história do negócio no estilo Substack (Markdown, tipografia serifada), badges de causas e depoimentos.
+- **Causas** como Pet friendly, Antirracista, Escala 5x2, Escala 4x3 e outras (lista em `src/lib/causas.ts`).
+- **Indicação** pela comunidade, com moderação antes de publicar.
+- **Reivindicação de propriedade** pelo dono, explicada abaixo.
+- **Painel do dono** para editar o perfil, responder depoimentos e ocultar o negócio.
+- **Moderação** com filas de reivindicações, indicações e denúncias, e registro de auditoria.
+
+## Stack
+
+Next.js 16 (App Router, Cache Components), React 19, Tailwind CSS 4, Prisma 7 + PostgreSQL, Zod e Vitest. A autenticação é por e-mail e senha (scrypt), com sessão em cookie `httpOnly`. O cookie guarda o token e o banco guarda só o hash dele.
+
+## Rodando localmente
+
+Requisitos: Node 22.12+ e Docker (ou um PostgreSQL seu).
+
+```bash
+docker compose up -d          # sobe o Postgres em localhost:5432
+cp .env.example .env          # ajuste ADMIN_EMAILS com o seu e-mail
+npm install                   # também gera o cliente do Prisma
+npm run db:migrate            # cria as tabelas
+npm run db:seed               # dados de exemplo (opcional)
+npm run dev                   # http://localhost:3000
+```
+
+O seed cria negócios fictícios e estas contas, todas com a senha `senha-demo-123`:
+
+| E-mail | Papel |
+| --- | --- |
+| `moderacao@exemplo.com` | moderação |
+| `ana@exemplo.com`, `joao@exemplo.com`, `bia@exemplo.com` | donos de negócios de exemplo |
+| `carla@exemplo.com` | tem uma reivindicação por DM esperando a moderação (código `BEM-CAFE42`) |
+
+Quem estiver em `ADMIN_EMAILS` vira moderador ao entrar.
+
+## Como o dono reivindica o negócio
+
+Reivindicar é **provar que você controla o @ do Instagram** do negócio. Há três caminhos, e todos começam no botão "Sou o dono" do perfil (`/empresas/<@>/reivindicar`):
+
+| Caminho | Aceita conta pessoal? | Como é aprovado |
+| --- | --- | --- |
+| **Entrar com Instagram** | Não (só contas comerciais ou de criador de conteúdo) | Na hora, se o @ conectado for o do negócio |
+| **Código por DM** | Sim | Pela moderação, ou sozinho se o webhook estiver configurado |
+| **Documento (CNPJ/MEI)** | Sim | Pela moderação |
+
+Regras que protegem os negócios (em `src/lib/reivindicacao.ts`):
+
+- O perfil fica ligado ao **ID da conta do Instagram**, não só ao @. Se um @ mudar de dono, a verificação nova vai para análise em vez de ser aprovada sozinha.
+- **Não existe aprovação automática quando há conflito**: o negócio já tem dono, o ID da conta é diferente do registrado ou a conta já está ligada a outro perfil. Nesses casos a moderação decide se adiciona a pessoa como co-dona ou transfere o perfil.
+- O código da DM vale 48 horas, fica preso à conta de quem o gerou e só é aceito se vier do @ do negócio. A tela avisa para nunca enviar um código passado por outra pessoa.
+- Cada pessoa pode fazer no máximo 10 solicitações e 10 indicações por dia.
+- Toda aprovação, recusa, edição e decisão de moderação fica registrada na auditoria (`/moderacao?aba=auditoria`).
+- Donos respondem depoimentos, mas não apagam. Uma denúncia não esconde o depoimento: só a moderação remove.
+- O dono pode **ocultar** o negócio do diretório a qualquer momento, por exemplo se foi indicado e não quer aparecer.
+
+Sem nenhuma configuração da Meta, o site já funciona com o código por DM conferido pela moderação e com o envio de documento. O botão "Entrar com Instagram" só aparece quando as variáveis do app estiverem preenchidas.
+
+### Ativando o "Entrar com Instagram"
+
+> Os nomes de telas e permissões da Meta mudam com frequência. Confira a [documentação oficial](https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login) antes de configurar.
+
+1. Em [developers.facebook.com](https://developers.facebook.com/), crie um app do tipo **Negócios** e adicione o produto **Instagram**, na opção de API com **login do Instagram**.
+2. Nas configurações de login, cadastre a URL de redirecionamento `https://SEU-DOMINIO/api/instagram/retorno`, com o mesmo valor de `APP_URL`.
+3. Copie o ID e a chave secreta **do app do Instagram** para `INSTAGRAM_APP_ID` e `INSTAGRAM_APP_SECRET`.
+4. Enquanto o app estiver em desenvolvimento, só as contas cadastradas como testadoras conseguem entrar. Para liberar para todo mundo, peça a revisão do app (acesso avançado à permissão `instagram_business_basic`) e faça a verificação do negócio na Meta.
+
+O site pede só `instagram_business_basic`, lê apenas o `user_id` e o `username` e **não guarda o token**.
+
+### Ativando a confirmação automática da DM (opcional)
+
+1. Conecte o perfil oficial (`INSTAGRAM_PERFIL_OFICIAL`) ao app e gere um token dele com `instagram_business_basic` e `instagram_business_manage_messages`. Coloque o token em `INSTAGRAM_ACCESS_TOKEN`.
+2. Cadastre o webhook com a URL `https://SEU-DOMINIO/api/webhooks/instagram` e o mesmo texto de `INSTAGRAM_WEBHOOK_VERIFY_TOKEN`. Depois assine o campo `messages`.
+3. Tokens de longa duração do Instagram vencem e precisam ser renovados periodicamente. Se o token vencer, nada quebra: as DMs passam a cair na fila da moderação com uma anotação.
+
+O webhook confere a assinatura `X-Hub-Signature-256` de cada chamada, descobre o @ de quem mandou a DM e só aprova sozinho quando o @ bate e não há conflito.
+
+## Testes e verificações
+
+```bash
+npm test          # testes unitários e de banco (precisa do Postgres rodando)
+npm run lint
+npm run typecheck
+```
+
+Os testes usam um banco separado (`negocio_do_bem_teste`, ou o de `TEST_DATABASE_URL`). Ele é criado na primeira execução e as tabelas são limpas entre os testes. Por segurança, a suíte só roda se o nome do banco tiver "test".
+
+## Publicando
+
+Funciona em qualquer hospedagem de Next.js com um PostgreSQL gerenciado, por exemplo Vercel com Neon ou Supabase.
+
+1. Configure as variáveis de `.env.example` no painel da hospedagem. `APP_URL` precisa ser o domínio público.
+2. Aplique as migrações no banco de produção com `npm run db:deploy`. Faça isso a cada mudança no `prisma/schema.prisma`.
+3. O `npm install` gera o cliente do Prisma, e o `npm run build` faz o resto.
+
+Nunca rode o seed em produção: ele cria contas com senha conhecida e se recusa a rodar quando `NODE_ENV=production`.
+
+## Estrutura
+
+```
+prisma/              esquema, migrações e dados de exemplo
+src/acoes/           Server Actions (formulários), sempre conferindo permissão no servidor
+src/app/             páginas e rotas (api/instagram e api/webhooks/instagram)
+src/components/      componentes de interface
+src/lib/             regras de negócio: reivindicacao.ts, instagram.ts, auth/, causas.ts, cnpj.ts…
+tests/               testes (unit/ sem banco, db/ com banco)
+```
+
+## Próximos passos sugeridos
+
+- Recuperação de senha e confirmação de e-mail (precisa de um serviço de envio de e-mail).
+- Limite de tentativas de login por IP.
+- Avisar o dono por e-mail quando a reivindicação for decidida ou quando chegar um depoimento.
+- Upload de fotos do negócio.
+- Renovação automática do token do Instagram usado pelo webhook.

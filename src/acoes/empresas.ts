@@ -1,0 +1,164 @@
+"use server";
+
+import { redirect } from "next/navigation";
+import { z } from "zod";
+import { registrarAuditoria } from "@/lib/auditoria";
+import { exigirUsuario } from "@/lib/auth/sessao";
+import { filtrarCausas } from "@/lib/causas";
+import { db } from "@/lib/db";
+import { CATEGORIAS, UFS } from "@/lib/dominio";
+import { errosPorCampo, texto, valoresDoFormulario, type EstadoFormulario } from "@/lib/formulario";
+import { normalizarUsername } from "@/lib/instagram";
+import { textoDeBusca } from "@/lib/texto";
+
+const LIMITE_INDICACOES_POR_DIA = 10;
+
+const camposComuns = {
+  nome: z.string().trim().min(2, "Qual é o nome do negócio?").max(80, "Nome muito longo."),
+  categoria: z.enum(CATEGORIAS, { error: "Escolha uma categoria." }),
+  cidade: z.string().trim().min(2, "Em que cidade fica?").max(60, "Nome de cidade muito longo."),
+  uf: z.enum(UFS, { error: "Escolha o estado." }),
+  resumo: z.string().trim().min(10, "Escreva uma frase sobre o negócio.").max(160, "Use até 160 caracteres."),
+};
+
+const esquemaIndicacao = z.object({
+  ...camposComuns,
+  instagram: z.string().transform((valor, ctx) => {
+    const username = normalizarUsername(valor);
+    if (!username) {
+      ctx.addIssue({ code: "custom", message: "Digite o @ do Instagram do negócio (ex.: @padariadobairro)." });
+      return z.NEVER;
+    }
+    return username;
+  }),
+  motivo: z.string().trim().max(600, "Use até 600 caracteres.").optional(),
+});
+
+export async function indicarEmpresa(_estado: EstadoFormulario, dados: FormData): Promise<EstadoFormulario> {
+  const usuario = await exigirUsuario("/indicar");
+  const valores = valoresDoFormulario(dados, ["causas"]);
+
+  const resultado = esquemaIndicacao.safeParse({
+    instagram: texto(dados, "instagram"),
+    nome: texto(dados, "nome"),
+    categoria: texto(dados, "categoria"),
+    cidade: texto(dados, "cidade"),
+    uf: texto(dados, "uf"),
+    resumo: texto(dados, "resumo"),
+    motivo: texto(dados, "motivo") || undefined,
+  });
+  if (!resultado.success) return { erros: errosPorCampo(resultado.error), valores };
+  const { instagram, motivo, ...campos } = resultado.data;
+  const souDono = dados.get("souDono") === "sim";
+
+  const existente = await db.empresa.findUnique({ where: { instagramUsername: instagram } });
+  if (existente) {
+    return {
+      erros: { instagram: `@${instagram} já está no Negócio do Bem.` },
+      existente: instagram,
+      valores,
+    };
+  }
+
+  const recentes = await db.empresa.count({
+    where: { indicadaPorId: usuario.id, criadoEm: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } },
+  });
+  if (recentes >= LIMITE_INDICACOES_POR_DIA) {
+    return { erro: "Você já fez muitas indicações hoje. Obrigado pela energia! Tente de novo amanhã.", valores };
+  }
+
+  const empresa = await db.empresa.create({
+    data: {
+      ...campos,
+      instagramUsername: instagram,
+      motivoIndicacao: souDono ? null : motivo || null,
+      indicadaPorId: usuario.id,
+      // Indicações de moderadores já entram publicadas.
+      moderacao: usuario.moderador ? "aprovada" : "pendente",
+      busca: textoDeBusca({ ...campos, instagramUsername: instagram }),
+      causas: { create: filtrarCausas(dados.getAll("causas").map(String)).map((causa) => ({ causa })) },
+    },
+  });
+  await registrarAuditoria(db, {
+    usuarioId: usuario.id,
+    acao: "empresa.indicada",
+    alvoTipo: "empresa",
+    alvoId: empresa.id,
+  });
+
+  redirect(souDono ? `/empresas/${instagram}/reivindicar` : `/empresas/${instagram}?aviso=indicada`);
+}
+
+const esquemaEdicao = z.object({
+  ...camposComuns,
+  historia: z.string().max(20_000, "A história pode ter até 20 mil caracteres.").default(""),
+  site: z
+    .string()
+    .trim()
+    .max(200)
+    .transform((valor, ctx) => {
+      if (!valor) return null;
+      const comProtocolo = /^https?:\/\//i.test(valor) ? valor : `https://${valor}`;
+      try {
+        const url = new URL(comProtocolo);
+        if (!url.hostname.includes(".")) throw new Error();
+        return url.toString();
+      } catch {
+        ctx.addIssue({ code: "custom", message: "Digite um endereço válido (ex.: www.meunegocio.com.br)." });
+        return z.NEVER;
+      }
+    }),
+});
+
+async function exigirDono(empresaId: string, voltarPara: string) {
+  const usuario = await exigirUsuario(voltarPara);
+  const membro = await db.empresaMembro.findUnique({
+    where: { empresaId_usuarioId: { empresaId, usuarioId: usuario.id } },
+    include: { empresa: true },
+  });
+  if (!membro) redirect("/painel");
+  return { usuario, empresa: membro.empresa };
+}
+
+export async function salvarEmpresa(_estado: EstadoFormulario, dados: FormData): Promise<EstadoFormulario> {
+  const { usuario, empresa } = await exigirDono(texto(dados, "empresaId"), "/painel");
+  const valores = valoresDoFormulario(dados, ["causas"]);
+
+  const resultado = esquemaEdicao.safeParse({
+    nome: texto(dados, "nome"),
+    categoria: texto(dados, "categoria"),
+    cidade: texto(dados, "cidade"),
+    uf: texto(dados, "uf"),
+    resumo: texto(dados, "resumo"),
+    historia: texto(dados, "historia").replace(/\r\n/g, "\n"),
+    site: texto(dados, "site"),
+  });
+  if (!resultado.success) return { erros: errosPorCampo(resultado.error), valores };
+  const campos = resultado.data;
+  const causas = filtrarCausas(dados.getAll("causas").map(String));
+
+  await db.$transaction([
+    db.empresa.update({
+      where: { id: empresa.id },
+      data: { ...campos, busca: textoDeBusca({ ...campos, instagramUsername: empresa.instagramUsername }) },
+    }),
+    db.empresaCausa.deleteMany({ where: { empresaId: empresa.id } }),
+    db.empresaCausa.createMany({ data: causas.map((causa) => ({ empresaId: empresa.id, causa })) }),
+  ]);
+  await registrarAuditoria(db, { usuarioId: usuario.id, acao: "empresa.editada", alvoTipo: "empresa", alvoId: empresa.id });
+
+  redirect(`/painel/${empresa.instagramUsername}?aviso=salvo`);
+}
+
+export async function alternarVisibilidade(dados: FormData): Promise<void> {
+  const { usuario, empresa } = await exigirDono(texto(dados, "empresaId"), "/painel");
+  const oculta = dados.get("ocultar") === "sim";
+  await db.empresa.update({ where: { id: empresa.id }, data: { oculta } });
+  await registrarAuditoria(db, {
+    usuarioId: usuario.id,
+    acao: oculta ? "empresa.ocultada" : "empresa.reexibida",
+    alvoTipo: "empresa",
+    alvoId: empresa.id,
+  });
+  redirect(`/painel/${empresa.instagramUsername}?aviso=${oculta ? "oculta" : "visivel"}`);
+}

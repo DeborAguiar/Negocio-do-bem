@@ -1,0 +1,383 @@
+import type { Metadata } from "next";
+import Form from "next/form";
+import Link from "next/link";
+import { Suspense } from "react";
+import { aprovarReivindicacao, decidirDenuncia, moderarEmpresa, recusarReivindicacao } from "@/acoes/moderacao";
+import { AvisoDaUrl } from "@/components/Avisos";
+import { BotaoEnviar } from "@/components/BotaoEnviar";
+import { CausaBadge } from "@/components/CausaBadge";
+import { exigirModerador } from "@/lib/auth/sessao";
+import { consultarCnpj, formatarCnpj } from "@/lib/cnpj";
+import { extrairCodigo } from "@/lib/codigo";
+import { db } from "@/lib/db";
+import { METODOS_REIVINDICACAO } from "@/lib/dominio";
+import { linkPerfil, perfilOficial } from "@/lib/instagram";
+import { formatarDataHora } from "@/lib/texto";
+
+export const metadata: Metadata = { title: "Moderação", robots: { index: false } };
+
+const ABAS = {
+  reivindicacoes: "Reivindicações",
+  indicacoes: "Indicações",
+  denuncias: "Denúncias",
+  auditoria: "Auditoria",
+} as const;
+type Aba = keyof typeof ABAS;
+
+export default function Moderacao(props: PageProps<"/moderacao">) {
+  return (
+    <div className="mx-auto max-w-5xl px-4 pt-12 sm:px-6">
+      <h1 className="font-serif text-4xl font-semibold tracking-tight">Moderação</h1>
+      <Suspense fallback={<div className="mt-8 h-96 animate-pulse rounded-3xl bg-white" />}>
+        <Conteudo searchParams={props.searchParams} />
+      </Suspense>
+    </div>
+  );
+}
+
+async function Conteudo({ searchParams }: Pick<PageProps<"/moderacao">, "searchParams">) {
+  await exigirModerador();
+  const params = await searchParams;
+  const aba: Aba = typeof params.aba === "string" && params.aba in ABAS ? (params.aba as Aba) : "reivindicacoes";
+  const codigo = typeof params.codigo === "string" ? extrairCodigo(params.codigo) : null;
+
+  const [reivindicacoes, indicacoes, denuncias] = await Promise.all([
+    db.reivindicacao.count({ where: { status: "pendente" } }),
+    db.empresa.count({ where: { moderacao: "pendente" } }),
+    db.depoimento.count({ where: { denunciado: true, status: "publicado" } }),
+  ]);
+  const contagens: Partial<Record<Aba, number>> = { reivindicacoes, indicacoes, denuncias };
+
+  return (
+    <div className="mt-6 space-y-6">
+      <nav className="flex flex-wrap gap-2" aria-label="Seções da moderação">
+        {(Object.keys(ABAS) as Aba[]).map((chave) => (
+          <Link
+            key={chave}
+            href={`/moderacao?aba=${chave}`}
+            aria-current={aba === chave ? "page" : undefined}
+            className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+              aba === chave ? "bg-tinta text-white" : "bg-white text-suave hover:text-tinta"
+            }`}
+          >
+            {ABAS[chave]}
+            {!!contagens[chave] && (
+              <span className={`ml-2 rounded-full px-2 py-0.5 text-xs ${aba === chave ? "bg-white/20" : "bg-coral-50 text-coral-700"}`}>
+                {contagens[chave]}
+              </span>
+            )}
+          </Link>
+        ))}
+      </nav>
+
+      <AvisoDaUrl codigo={params.aviso} />
+
+      {aba === "reivindicacoes" && <Reivindicacoes codigo={codigo} />}
+      {aba === "indicacoes" && <Indicacoes />}
+      {aba === "denuncias" && <Denuncias />}
+      {aba === "auditoria" && <Auditoria />}
+    </div>
+  );
+}
+
+async function Reivindicacoes({ codigo }: { codigo: string | null }) {
+  const pendentes = await db.reivindicacao.findMany({
+    where: { status: "pendente", ...(codigo ? { codigo } : {}) },
+    orderBy: { criadoEm: "asc" },
+    take: 50,
+    include: {
+      usuario: { select: { nome: true, email: true } },
+      empresa: { include: { membros: { include: { usuario: { select: { nome: true, email: true } } } } } },
+    },
+  });
+  const oficial = perfilOficial();
+  const agora = new Date();
+
+  return (
+    <div className="space-y-4">
+      <Form action="/moderacao" className="cartao flex flex-col gap-2 p-3 sm:flex-row sm:items-center">
+        <input type="hidden" name="aba" value="reivindicacoes" />
+        <label htmlFor="codigo" className="px-2 text-sm font-medium whitespace-nowrap">
+          Chegou uma DM com código?
+        </label>
+        <input id="codigo" name="codigo" defaultValue={codigo ?? ""} placeholder="BEM-XXXXXX" className="campo flex-1 font-mono uppercase" />
+        <button type="submit" className="botao">
+          Localizar
+        </button>
+        {codigo && (
+          <Link href="/moderacao?aba=reivindicacoes" className="botao-claro">
+            Ver todas
+          </Link>
+        )}
+      </Form>
+
+      {pendentes.length === 0 && (
+        <p className="cartao p-8 text-center text-suave">
+          {codigo ? `Nenhuma solicitação pendente com o código ${codigo}.` : "Nenhuma reivindicação pendente. 🎉"}
+        </p>
+      )}
+
+      {pendentes.map((r) => {
+        const expirada = r.expiraEm <= agora;
+        const temDono = r.empresa.membros.length > 0;
+        return (
+          <article key={r.id} className="cartao space-y-4 p-6">
+            <header className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <Link href={`/empresas/${r.empresa.instagramUsername}`} className="font-serif text-2xl font-semibold hover:text-coral-700">
+                  {r.empresa.nome}
+                </Link>
+                <p className="text-sm text-suave">
+                  <a href={linkPerfil(r.empresa.instagramUsername)} target="_blank" rel="noopener noreferrer" className="link">
+                    @{r.empresa.instagramUsername}
+                  </a>{" "}
+                  · {r.empresa.status === "verificada" ? "já verificado" : "sem dono"}
+                </p>
+              </div>
+              <div className="text-right text-sm">
+                <p className="font-semibold">{METODOS_REIVINDICACAO[r.metodo]}</p>
+                <p className="text-suave">pedido em {formatarDataHora(r.criadoEm)}</p>
+                {expirada && <p className="font-medium text-coral-700">expirado em {formatarDataHora(r.expiraEm)}</p>}
+              </div>
+            </header>
+
+            <p className="text-sm">
+              <span className="text-suave">Solicitante:</span> <strong>{r.usuario.nome}</strong> ({r.usuario.email})
+            </p>
+
+            {r.metodo === "codigo_dm" && r.codigo && (
+              <div className="rounded-2xl bg-papel p-4 text-sm leading-relaxed">
+                Confira se <strong>@{oficial}</strong> recebeu uma DM <strong>de @{r.empresa.instagramUsername}</strong> com o
+                código <code className="rounded bg-white px-2 py-0.5 font-mono text-base font-bold text-coral-700">{r.codigo}</code>.
+                Se a DM veio de outra conta, recuse.
+              </div>
+            )}
+
+            {r.metodo === "documento" && (
+              <dl className="grid gap-x-6 gap-y-2 rounded-2xl bg-papel p-4 text-sm sm:grid-cols-[10rem_1fr]">
+                <dt className="text-suave">Relação</dt>
+                <dd>{r.relacao}</dd>
+                <dt className="text-suave">Contato</dt>
+                <dd>{r.contato}</dd>
+                {r.cnpj && (
+                  <>
+                    <dt className="text-suave">CNPJ</dt>
+                    <dd>
+                      {formatarCnpj(r.cnpj)}
+                      <Suspense fallback={<span className="block text-suave">Consultando a Receita…</span>}>
+                        <DadosCnpj cnpj={r.cnpj} />
+                      </Suspense>
+                    </dd>
+                  </>
+                )}
+                {r.mensagem && (
+                  <>
+                    <dt className="text-suave">Mensagem</dt>
+                    <dd className="whitespace-pre-line">{r.mensagem}</dd>
+                  </>
+                )}
+              </dl>
+            )}
+
+            {r.notas && (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm whitespace-pre-line text-amber-900">
+                {r.notas}
+              </div>
+            )}
+
+            {temDono && (
+              <p className="text-sm text-suave">
+                Donos atuais: {r.empresa.membros.map((m) => `${m.usuario.nome} (${m.usuario.email})`).join(", ")}
+              </p>
+            )}
+
+            <div className="flex flex-col gap-3 border-t border-linha pt-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="flex flex-wrap gap-2">
+                <form action={aprovarReivindicacao}>
+                  <input type="hidden" name="reivindicacaoId" value={r.id} />
+                  <input type="hidden" name="modo" value="adicionar" />
+                  <BotaoEnviar className="botao botao-pequeno" enviando="Aprovando…">
+                    {temDono ? "Aprovar como co-dono" : "Aprovar"}
+                  </BotaoEnviar>
+                </form>
+                {temDono && (
+                  <form action={aprovarReivindicacao}>
+                    <input type="hidden" name="reivindicacaoId" value={r.id} />
+                    <input type="hidden" name="modo" value="transferir" />
+                    <BotaoEnviar className="botao-coral botao-pequeno" enviando="Transferindo…">
+                      Aprovar e transferir
+                    </BotaoEnviar>
+                  </form>
+                )}
+              </div>
+              <form action={recusarReivindicacao} className="flex flex-1 gap-2 sm:max-w-md">
+                <input type="hidden" name="reivindicacaoId" value={r.id} />
+                <input name="motivo" maxLength={500} placeholder="Motivo da recusa (a pessoa vê)" className="campo py-1.5 text-sm" />
+                <BotaoEnviar className="botao-claro botao-pequeno" enviando="…">
+                  Recusar
+                </BotaoEnviar>
+              </form>
+            </div>
+          </article>
+        );
+      })}
+    </div>
+  );
+}
+
+async function DadosCnpj({ cnpj }: { cnpj: string }) {
+  const dados = await consultarCnpj(cnpj);
+  if (!dados) return <span className="block text-suave">Não foi possível consultar a Receita agora.</span>;
+  return (
+    <span className="block text-suave">
+      {dados.razaoSocial}
+      {dados.nomeFantasia && ` (${dados.nomeFantasia})`} · {dados.situacao ?? "situação desconhecida"}
+      {dados.municipio && ` · ${dados.municipio}/${dados.uf}`}
+    </span>
+  );
+}
+
+async function Indicacoes() {
+  const pendentes = await db.empresa.findMany({
+    where: { moderacao: "pendente" },
+    orderBy: { criadoEm: "asc" },
+    take: 50,
+    include: { causas: true, indicadaPor: { select: { nome: true, email: true } } },
+  });
+  if (pendentes.length === 0) return <p className="cartao p-8 text-center text-suave">Nenhuma indicação esperando. 🎉</p>;
+
+  return (
+    <div className="space-y-4">
+      {pendentes.map((e) => (
+        <article key={e.id} className="cartao space-y-3 p-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <Link href={`/empresas/${e.instagramUsername}`} className="font-serif text-2xl font-semibold hover:text-coral-700">
+                {e.nome}
+              </Link>
+              <p className="text-sm text-suave">
+                <a href={linkPerfil(e.instagramUsername)} target="_blank" rel="noopener noreferrer" className="link">
+                  @{e.instagramUsername} ↗
+                </a>{" "}
+                · {e.categoria} · {e.cidade}/{e.uf}
+              </p>
+            </div>
+            <p className="text-right text-sm text-suave">
+              por {e.indicadaPor?.nome ?? "conta removida"}
+              <br />
+              {formatarDataHora(e.criadoEm)}
+            </p>
+          </div>
+          <p>{e.resumo}</p>
+          {e.motivoIndicacao && <p className="text-sm text-suave italic">“{e.motivoIndicacao}”</p>}
+          {e.causas.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {e.causas.map((c) => (
+                <CausaBadge key={c.causa} slug={c.causa} />
+              ))}
+            </div>
+          )}
+          <div className="flex gap-2 border-t border-linha pt-4">
+            <form action={moderarEmpresa}>
+              <input type="hidden" name="empresaId" value={e.id} />
+              <input type="hidden" name="decisao" value="aprovar" />
+              <BotaoEnviar className="botao botao-pequeno" enviando="…">
+                Publicar
+              </BotaoEnviar>
+            </form>
+            <form action={moderarEmpresa}>
+              <input type="hidden" name="empresaId" value={e.id} />
+              <input type="hidden" name="decisao" value="rejeitar" />
+              <BotaoEnviar className="botao-claro botao-pequeno" enviando="…">
+                Não publicar
+              </BotaoEnviar>
+            </form>
+          </div>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+async function Denuncias() {
+  const denunciados = await db.depoimento.findMany({
+    where: { denunciado: true, status: "publicado" },
+    orderBy: { criadoEm: "asc" },
+    take: 50,
+    include: {
+      autor: { select: { nome: true, email: true } },
+      denunciadoPor: { select: { nome: true } },
+      empresa: { select: { nome: true, instagramUsername: true } },
+    },
+  });
+  if (denunciados.length === 0) return <p className="cartao p-8 text-center text-suave">Nenhuma denúncia aberta. 🎉</p>;
+
+  return (
+    <div className="space-y-4">
+      {denunciados.map((d) => (
+        <article key={d.id} className="cartao space-y-3 p-6">
+          <p className="text-sm text-suave">
+            Em{" "}
+            <Link href={`/empresas/${d.empresa.instagramUsername}#depoimentos`} className="link">
+              {d.empresa.nome}
+            </Link>{" "}
+            · por {d.autor.nome} ({d.autor.email}) · {formatarDataHora(d.criadoEm)}
+          </p>
+          <blockquote className="font-serif text-lg whitespace-pre-line">{d.texto}</blockquote>
+          <p className="rounded-2xl bg-coral-50 p-3 text-sm text-coral-700">
+            Denunciado por {d.denunciadoPor?.nome ?? "conta removida"}: {d.motivoDenuncia}
+          </p>
+          <div className="flex gap-2 border-t border-linha pt-4">
+            <form action={decidirDenuncia}>
+              <input type="hidden" name="depoimentoId" value={d.id} />
+              <input type="hidden" name="decisao" value="manter" />
+              <BotaoEnviar className="botao-claro botao-pequeno" enviando="…">
+                Manter no ar
+              </BotaoEnviar>
+            </form>
+            <form action={decidirDenuncia}>
+              <input type="hidden" name="depoimentoId" value={d.id} />
+              <input type="hidden" name="decisao" value="remover" />
+              <BotaoEnviar className="botao-coral botao-pequeno" enviando="…">
+                Remover
+              </BotaoEnviar>
+            </form>
+          </div>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+async function Auditoria() {
+  const registros = await db.registroAuditoria.findMany({
+    orderBy: { criadoEm: "desc" },
+    take: 100,
+    include: { usuario: { select: { nome: true } } },
+  });
+  return (
+    <div className="cartao overflow-x-auto">
+      <table className="w-full text-left text-sm">
+        <thead className="border-b border-linha text-xs tracking-wide text-suave uppercase">
+          <tr>
+            <th className="p-3 font-semibold">Quando</th>
+            <th className="p-3 font-semibold">Quem</th>
+            <th className="p-3 font-semibold">Ação</th>
+            <th className="p-3 font-semibold">Detalhes</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-linha">
+          {registros.map((r) => (
+            <tr key={r.id}>
+              <td className="p-3 whitespace-nowrap text-suave">{formatarDataHora(r.criadoEm)}</td>
+              <td className="p-3">{r.usuario?.nome ?? <span className="text-suave italic">sistema</span>}</td>
+              <td className="p-3 font-mono text-xs">{r.acao}</td>
+              <td className="p-3 text-suave">{r.detalhes ?? `${r.alvoTipo} ${r.alvoId}`}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {registros.length === 0 && <p className="p-8 text-center text-suave">Nada registrado ainda.</p>}
+    </div>
+  );
+}
