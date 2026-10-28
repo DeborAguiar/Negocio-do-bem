@@ -1,4 +1,6 @@
 # Banco local para desenvolvimento: `docker compose up -d`
+# Usa a porta 5433 do seu computador para não brigar com um Postgres já
+# instalado (Homebrew, Postgres.app), que normalmente ocupa a 5432.
 services:
   db:
     image: postgres:16-alpine
@@ -7,7 +9,7 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: negocio_do_bem
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - dados-postgres:/var/lib/postgresql/data
 

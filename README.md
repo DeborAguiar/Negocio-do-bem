@@ -19,7 +19,7 @@ Next.js 16 (App Router, Cache Components), React 19, Tailwind CSS 4, Prisma 7 + 
 Requisitos: Node 22.12+ e Docker (ou um PostgreSQL seu).
 
 ```bash
-docker compose up -d          # sobe o Postgres em localhost:5432
+docker compose up -d          # sobe o Postgres em localhost:5433
 cp .env.example .env          # ajuste ADMIN_EMAILS com o seu e-mail
 npm install                   # também gera o cliente do Prisma
 npm run db:migrate            # cria as tabelas
@@ -36,6 +36,13 @@ O seed cria negócios fictícios e estas contas, todas com a senha `senha-demo-1
 | `carla@exemplo.com` | tem uma reivindicação por DM esperando a moderação (código `BEM-CAFE42`) |
 
 Quem estiver em `ADMIN_EMAILS` vira moderador ao entrar.
+
+### Problemas comuns
+
+- **"User was denied access on the database"**: o `DATABASE_URL` está apontando para outro Postgres, geralmente um instalado no computador (Homebrew ou Postgres.app) na porta 5432. O do Docker usa a **5433**: confira se o seu `.env` tem `localhost:5433`, como no `.env.example`, e rode `npm run db:migrate` de novo.
+- **"Can't reach database server"**: o Docker não está rodando. Abra o Docker Desktop e rode `docker compose up -d`.
+- **"The table `public.Empresa` does not exist"**: faltou criar as tabelas. Rode `npm run db:migrate`.
+- Depois de mudar o `.env`, pare o `npm run dev` (Ctrl+C) e rode de novo.
 
 ## Como o dono reivindica o negócio
 
