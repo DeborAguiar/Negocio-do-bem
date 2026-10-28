@@ -17,7 +17,10 @@ export default function Inicio(props: PageProps<"/">) {
         />
         <div className="relative mx-auto max-w-4xl px-4 pt-16 pb-14 text-center sm:px-6 sm:pt-24">
           <p className="mx-auto mb-6 inline-flex items-center gap-2 rounded-full border border-coral/20 bg-white/70 px-4 py-1.5 text-sm font-medium text-coral-700">
-            <span aria-hidden="true">🌱</span> Um movimento do bem<span className="hidden sm:inline">, feito pela comunidade</span>
+            <span aria-hidden="true">🌱</span>
+            <span>
+              Um movimento do bem<span className="hidden sm:inline">, feito pela comunidade</span>
+            </span>
           </p>
           <h1 className="font-serif text-5xl leading-[1.05] font-semibold tracking-tight text-balance sm:text-7xl">
             Compre de quem <span className="italic text-coral">faz o bem.</span>
