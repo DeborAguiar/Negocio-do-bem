@@ -243,6 +243,15 @@ O PR de publicação [#46](https://github.com/fabsreis/Negocio-do-bem/pull/46) c
 - **A primeira vez:** a base comum ainda era `12f1e87`, de antes da `stage`. Um PR sem nenhuma mudança de arquivo ([#52](https://github.com/fabsreis/Negocio-do-bem/pull/52)), com a `stage` mais um merge da `main`, entrou na `main` por merge commit e fez a base comum avançar até a `stage`.
 - **O custo:** a `main` deixa de ter histórico linear. `git log --first-parent main` mostra uma linha por publicação.
 
+### 29 de outubro: cidades da lista do IBGE ([#35](https://github.com/fabsreis/Negocio-do-bem/issues/35))
+
+A cidade era digitada à mão, com o estado num seletor à parte. A mesma cidade aparecia escrita de jeitos diferentes ("Sao Paulo", "são paulo"), o que atrapalha a busca e a contagem por cidade.
+
+- **A lista fica no projeto.** `src/lib/municipios.json` tem os municípios do IBGE, e `npm run municipios:atualizar` baixa de novo. Nada de consultar uma API a cada acesso, para o site não depender de terceiros.
+- **Cidade e UF viraram um campo só,** que sugere cidades enquanto a pessoa digita e envia "Recife, PE". O banco continua com as duas colunas.
+- **A lista só é baixada quando alguém mexe no campo.** O `CampoMunicipio` carrega `src/lib/municipios.ts` com `import()`, e os cerca de 110 KB não pesam nas outras páginas.
+- **O servidor confere na mesma lista** e grava o nome oficial, com acentos. O campo funciona sem JavaScript: "Recife, PE" digitado à mão também vale.
+
 ---
 
 ## 4. Arquitetura
@@ -473,6 +482,12 @@ Para trocar o slug de uma causa existente, crie uma migração que atualize `Emp
 6. Mostre o campo no perfil (`src/app/empresas/[usuario]/page.tsx`) e, se fizer sentido, na fila de indicações da moderação.
 7. Atualize os dados de exemplo em `prisma/seed.ts`.
 8. Atualize a [seção 3 das regras de negócio](regras-de-negocio.md#dados-do-negócio).
+
+### Atualizar a lista de municípios
+
+1. Rode `npm run municipios:atualizar`. O script `scripts/municipios-ibge.ts` baixa a lista do IBGE e regrava `src/lib/municipios.json`.
+2. Confira no diff os municípios novos ou renomeados e rode `npm test`.
+3. Negócios de uma cidade renomeada continuam com o nome antigo até serem editados.
 
 ### Mudar uma regra da reivindicação
 
