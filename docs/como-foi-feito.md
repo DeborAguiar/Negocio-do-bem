@@ -244,6 +244,8 @@ Muitos negócios ficavam sem foto até o dono entrar. A ideia era buscar a foto 
 
 A autenticação é feita no próprio projeto (`src/lib/auth/`), com e-mail, senha (scrypt) e sessão em cookie. Isso evita depender de um serviço externo para algo simples.
 
+Como o e-mail do cadastro não é confirmado, ele nunca dá permissão. A moderação vem só do `papel` gravado no banco, conferido no servidor a cada requisição, e quem cuida do projeto dá esse papel com `npm run moderacao`. Até outubro de 2026 a variável `ADMIN_EMAILS` também dava moderação, e qualquer pessoa que se cadastrasse com um daqueles e-mails antes do dono levava o acesso.
+
 ### Como uma requisição anda
 
 ```mermaid
@@ -417,7 +419,6 @@ npm run typecheck
 | `DATABASE_URL` | Sim | Conexão com o Postgres. |
 | `DATABASE_URL_UNPOOLED` | No Neon | Conexão direta, usada pelas migrações. |
 | `APP_URL` | Sim | Endereço público do site, sem barra no final. |
-| `ADMIN_EMAILS` | Sim | E-mails da moderação, separados por vírgula. |
 | `BLOB_READ_WRITE_TOKEN` | Em produção | Fotos no Vercel Blob. |
 | `NEXT_PUBLIC_GA_ID` | Não | Google Analytics. Configure só em Production. |
 | `FOTOS_TOKEN` | Não | Liga a rota da rotina de fotos do Instagram. No mínimo 32 caracteres. |
@@ -467,6 +468,14 @@ Para trocar o slug de uma causa existente, crie uma migração que atualize `Emp
 2. Registre na auditoria com `registrarAuditoria`, com uma ação no formato `alvo.verbo` (por exemplo, `empresa.despublicada`).
 3. Volte para a aba certa com um aviso: `redirect("/moderacao?aba=…&aviso=feito")`.
 4. Atualize a [tabela da auditoria](regras-de-negocio.md#13-auditoria).
+
+### Dar ou tirar a moderação
+
+1. A pessoa se cadastra no site com o e-mail dela.
+2. Com a conexão do banco certo, rode `npm run moderacao -- dar <e-mail>` (ou `tirar <e-mail>`). Para a produção, passe a conexão do Neon na frente: `DATABASE_URL="postgresql://..." npm run moderacao -- dar <e-mail>`.
+3. Confira com `npm run moderacao -- listar`, que mostra quem é moderação e quem já fez ações de moderação, marcando quem não é mais.
+
+Nunca crie uma regra que dê permissão pelo e-mail ou por outro dado que a própria pessoa digita no cadastro.
 
 ### Mostrar uma mensagem depois de uma ação
 
