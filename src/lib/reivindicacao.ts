@@ -332,10 +332,12 @@ export async function aprovar(params: {
   const { reivindicacaoId, revisorId, modo = "adicionar" } = params;
 
   await db.$transaction(async (tx) => {
-    const reivindicacao = await tx.reivindicacao.findUnique({ where: { id: reivindicacaoId } });
-    if (!reivindicacao || reivindicacao.status !== "pendente") {
-      throw new ErroReivindicacao("Esta solicitação não está mais pendente.");
-    }
+    const { count } = await tx.reivindicacao.updateMany({
+      where: { id: reivindicacaoId, status: "pendente" },
+      data: { status: "aprovada", revisadoPorId: revisorId, revisadoEm: new Date() },
+    });
+    if (count === 0) throw new ErroReivindicacao("Esta solicitação não está mais pendente.");
+    const reivindicacao = await tx.reivindicacao.findUniqueOrThrow({ where: { id: reivindicacaoId } });
     const { empresaId, usuarioId } = reivindicacao;
     const instagramUserId = params.instagramUserId ?? reivindicacao.instagramUserId;
     const instagramIgsid = params.instagramIgsid ?? reivindicacao.instagramIgsid;
@@ -375,13 +377,7 @@ export async function aprovar(params: {
 
     await tx.reivindicacao.update({
       where: { id: reivindicacaoId },
-      data: {
-        status: "aprovada",
-        revisadoPorId: revisorId,
-        revisadoEm: new Date(),
-        instagramUserId,
-        instagramIgsid,
-      },
+      data: { instagramUserId, instagramIgsid },
     });
     await tx.reivindicacao.updateMany({
       where: { empresaId, usuarioId, status: "pendente", id: { not: reivindicacaoId } },
@@ -400,12 +396,8 @@ export async function aprovar(params: {
 
 export async function recusar(params: { reivindicacaoId: string; revisorId: string; motivo: string }): Promise<void> {
   await db.$transaction(async (tx) => {
-    const reivindicacao = await tx.reivindicacao.findUnique({ where: { id: params.reivindicacaoId } });
-    if (!reivindicacao || reivindicacao.status !== "pendente") {
-      throw new ErroReivindicacao("Esta solicitação não está mais pendente.");
-    }
-    await tx.reivindicacao.update({
-      where: { id: params.reivindicacaoId },
+    const { count } = await tx.reivindicacao.updateMany({
+      where: { id: params.reivindicacaoId, status: "pendente" },
       data: {
         status: "recusada",
         motivoRecusa: params.motivo,
@@ -413,6 +405,8 @@ export async function recusar(params: { reivindicacaoId: string; revisorId: stri
         revisadoEm: new Date(),
       },
     });
+    if (count === 0) throw new ErroReivindicacao("Esta solicitação não está mais pendente.");
+    const reivindicacao = await tx.reivindicacao.findUniqueOrThrow({ where: { id: params.reivindicacaoId } });
     await registrarAuditoria(tx, {
       usuarioId: params.revisorId,
       acao: "reivindicacao.recusada",

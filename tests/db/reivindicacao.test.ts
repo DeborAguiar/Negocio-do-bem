@@ -335,6 +335,71 @@ describe("documento e moderação", () => {
     expect(await db.registroAuditoria.count({ where: { acao: "reivindicacao.recusada" } })).toBe(1);
   });
 
+  describe("duas pessoas da moderação ao mesmo tempo", () => {
+    async function pedidoEmDisputa() {
+      const pessoa = await criarUsuario("Pessoa");
+      const dono = await criarUsuario("Dono");
+      const empresa = await criarEmpresa("loja.disputa");
+      await db.empresaMembro.create({ data: { empresaId: empresa.id, usuarioId: dono.id } });
+      const pedido = await solicitarPorDocumento({ empresaId: empresa.id, usuarioId: pessoa.id, cnpj: null, site: null, relacao: "Dono", contato: "x", mensagem: null });
+      return { pessoa, dono, empresa, pedido, moderadoras: [await criarUsuario("Moderação 1"), await criarUsuario("Moderação 2")] };
+    }
+
+    function vencedoras(resultados: PromiseSettledResult<void>[]) {
+      for (const r of resultados) if (r.status === "rejected") expect(r.reason).toBeInstanceOf(ErroReivindicacao);
+      return resultados.filter((r) => r.status === "fulfilled").length;
+    }
+
+    it("aprovar e recusar: só uma decisão vale", async () => {
+      const { pessoa, dono, empresa, pedido, moderadoras } = await pedidoEmDisputa();
+
+      const resultados = await Promise.allSettled([
+        aprovar({ reivindicacaoId: pedido.id, revisorId: moderadoras[0]!.id, modo: "transferir" }),
+        recusar({ reivindicacaoId: pedido.id, revisorId: moderadoras[1]!.id, motivo: "Não confere." }),
+      ]);
+
+      expect(vencedoras(resultados)).toBe(1);
+      const final = await db.reivindicacao.findUniqueOrThrow({ where: { id: pedido.id } });
+      const auditoria = await db.registroAuditoria.findMany({ where: { alvoId: empresa.id } });
+      expect(auditoria).toHaveLength(1);
+      if (final.status === "aprovada") {
+        expect(final.motivoRecusa).toBeNull();
+        expect(await donos(empresa.id)).toEqual([pessoa.id]);
+        expect(auditoria[0]!.acao).toBe("reivindicacao.aprovada_com_transferencia");
+      } else {
+        expect(final.status).toBe("recusada");
+        expect(await donos(empresa.id)).toEqual([dono.id]);
+        expect(auditoria[0]!.acao).toBe("reivindicacao.recusada");
+      }
+    });
+
+    it("aprovar duas vezes com modos diferentes: só uma aprovação vale", async () => {
+      const { pessoa, dono, empresa, pedido, moderadoras } = await pedidoEmDisputa();
+
+      const resultados = await Promise.allSettled([
+        aprovar({ reivindicacaoId: pedido.id, revisorId: moderadoras[0]!.id, modo: "adicionar" }),
+        aprovar({ reivindicacaoId: pedido.id, revisorId: moderadoras[1]!.id, modo: "transferir" }),
+      ]);
+
+      expect(vencedoras(resultados)).toBe(1);
+      const auditoria = await db.registroAuditoria.findMany({ where: { alvoId: empresa.id } });
+      expect(auditoria).toHaveLength(1);
+      const esperado = auditoria[0]!.acao === "reivindicacao.aprovada" ? [pessoa.id, dono.id].sort() : [pessoa.id];
+      expect(await donos(empresa.id)).toEqual(esperado);
+    });
+
+    it("recusar duas vezes: só a primeira recusa vale", async () => {
+      const { empresa, pedido, moderadoras } = await pedidoEmDisputa();
+
+      const resultados = await Promise.allSettled(
+        moderadoras.map((m, i) => recusar({ reivindicacaoId: pedido.id, revisorId: m.id, motivo: `Motivo ${i}` })),
+      );
+
+      expect(vencedoras(resultados)).toBe(1);
+      expect(await db.registroAuditoria.count({ where: { alvoId: empresa.id } })).toBe(1);
+    });
+  });
+
   it("limita a quantidade de solicitações por dia", async () => {
     const pessoa = await criarUsuario();
     for (let i = 0; i < 10; i++) {

@@ -50,6 +50,7 @@ export const AVISOS: Record<string, { tipo: TipoAviso; texto: string }> = {
   denuncia_enviada: { tipo: "info", texto: "Denúncia enviada. A moderação vai avaliar." },
   feito: { tipo: "sucesso", texto: "Feito." },
   ja_processada: { tipo: "erro", texto: "Esta solicitação já tinha sido decidida por outra pessoa da moderação." },
+  ja_decidido: { tipo: "erro", texto: "Outra pessoa da moderação já tinha decidido isso. A lista mostra como ficou." },
   cancelada: { tipo: "info", texto: "Solicitação cancelada." },
 };
 
