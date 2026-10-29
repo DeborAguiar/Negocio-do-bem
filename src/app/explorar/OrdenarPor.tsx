@@ -1,25 +1,26 @@
-"use client";
-
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { ORDENS, type Ordem } from "@/lib/diretorio";
 
-/** Seletor de ordenação: cada opção já vem com o link do diretório reordenado. */
+/** Seletor de ordenação: cada opção é um link do diretório reordenado, e funciona sem JavaScript. */
 export function OrdenarPor({ atual, links }: { atual: Ordem; links: Record<Ordem, string> }) {
-  const router = useRouter();
   return (
-    <label className="inline-flex items-center gap-2 text-sm text-suave">
-      Ordenar
-      <select
-        value={atual}
-        onChange={(evento) => router.push(links[evento.target.value as Ordem], { scroll: false })}
-        className="rounded-full border border-linha bg-superficie py-2 pr-8 pl-3 text-sm font-medium text-tinta"
-      >
-        {(Object.keys(ORDENS) as Ordem[]).map((ordem) => (
-          <option key={ordem} value={ordem}>
-            {ORDENS[ordem]}
-          </option>
-        ))}
-      </select>
-    </label>
+    <div role="group" aria-labelledby="rotulo-ordenar" className="flex flex-wrap items-center gap-1.5 text-sm text-suave">
+      <span id="rotulo-ordenar" className="mr-0.5">
+        Ordenar
+      </span>
+      {(Object.keys(ORDENS) as Ordem[]).map((ordem) => (
+        <Link
+          key={ordem}
+          href={links[ordem]}
+          scroll={false}
+          aria-current={atual === ordem ? "true" : undefined}
+          className={`rounded-full border px-3 py-1.5 font-medium whitespace-nowrap transition ${
+            atual === ordem ? "border-tinta bg-tinta text-papel" : "border-linha bg-superficie text-suave hover:text-tinta"
+          }`}
+        >
+          {ORDENS[ordem]}
+        </Link>
+      ))}
+    </div>
   );
 }
