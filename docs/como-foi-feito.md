@@ -231,6 +231,37 @@ O painel do Vercel recomendou revogar o token de leitura e escrita do Blob de pr
 - **O site usa o Blob com `BLOB_STORE_ID` ou `BLOB_READ_WRITE_TOKEN`** (`src/lib/armazenamento.ts`). Sem nenhuma das duas, continua a pasta local em desenvolvimento e o erro em produção.
 - **Com a mudança em produção, o token do Blob de produção é revogado** no painel (página **Projects** do Blob). Ele também estava guardado nos deploys de preview antigos, de antes do Blob dos previews. Revogar tira esse acesso de vez.
 
+### 29 de outubro: a publicação entra por merge commit ([#50](https://github.com/fabsreis/Negocio-do-bem/issues/50))
+
+O PR de publicação [#46](https://github.com/fabsreis/Negocio-do-bem/pull/46) conflitou, mesmo com a `main` contida na `stage`. Com squash nas duas branches, a base comum da `stage` e da `main` não avançava: cada publicação criava na `main` um commit novo, que a `stage` não tinha. Quando a `stage` mudava linhas perto do que já tinha sido publicado, o Git via duas mudanças diferentes no mesmo trecho.
+
+- **A `main` aceita só merge commit.** O ruleset único virou dois. O da `stage` (e de `releases/**`) continua só com squash e histórico linear. O da `main` aceita só merge commit e não exige histórico linear. Depois de cada publicação, a ponta da `stage` passa a fazer parte da história da `main`, e o próximo PR mostra só o que ainda falta publicar.
+- **Por que não as outras saídas.**
+  - Um PR da `main` de volta para a `stage` depois de cada publicação não resolve: o squash na `stage` não registra a `main` como pai, e a base comum continua parada.
+  - A saída usada no [#48](https://github.com/fabsreis/Negocio-do-bem/pull/48), um branch com a `stage` mais um merge da `main`, funciona. Só que precisaria se repetir a cada conflito, e os conflitos ficariam mais frequentes, porque a distância entre a base comum e a `main` só cresce.
+- **A aprovação ficou só na `main`.** O projeto tem uma pessoa com acesso de escrita, e o GitHub não deixa aprovar o próprio PR. Com 1 aprovação exigida nas duas branches, todo merge dependia do bypass, e o auto-merge nunca disparava. Agora a `stage` não exige aprovação, e os PRs do dia a dia entram com o botão normal, depois da checagem. A `main` continua exigindo 1 aprovação, para publicar em produção ser um passo consciente. Quando o projeto tiver outra pessoa mantenedora, a aprovação volta para a `stage`.
+- **A primeira vez:** a base comum ainda era `12f1e87`, de antes da `stage`. Um PR sem nenhuma mudança de arquivo ([#52](https://github.com/fabsreis/Negocio-do-bem/pull/52)), com a `stage` mais um merge da `main`, entrou na `main` por merge commit e fez a base comum avançar até a `stage`.
+- **O custo:** a `main` deixa de ter histórico linear. `git log --first-parent main` mostra uma linha por publicação.
+
+### 29 de outubro: cidades da lista do IBGE ([#35](https://github.com/fabsreis/Negocio-do-bem/issues/35))
+
+A cidade era digitada à mão, com o estado num seletor à parte. A mesma cidade aparecia escrita de jeitos diferentes ("Sao Paulo", "são paulo"), o que atrapalha a busca e a contagem por cidade.
+
+- **A lista fica no projeto.** `src/lib/municipios.json` tem os municípios do IBGE, e `npm run municipios:atualizar` baixa de novo. Nada de consultar uma API a cada acesso, para o site não depender de terceiros.
+- **Cidade e UF viraram um campo só,** que sugere cidades enquanto a pessoa digita e envia "Recife, PE". O banco continua com as duas colunas.
+- **A lista só é baixada quando alguém mexe no campo.** O `CampoMunicipio` carrega `src/lib/municipios.ts` com `import()`, e os cerca de 110 KB não pesam nas outras páginas.
+- **O servidor confere na mesma lista** e grava o nome oficial, com acentos. O campo funciona sem JavaScript: "Recife, PE" digitado à mão também vale.
+
+### 29 de outubro: página inicial nova e diretório com filtros ([#39](https://github.com/fabsreis/Negocio-do-bem/issues/39))
+
+A página inicial juntava apresentação, busca, filtros de causas e a lista de negócios, e achar um negócio era confuso. Três variações foram desenhadas num protótipo. A escolhida juntou a página inicial de uma com o diretório de outra.
+
+- **A página inicial ficou para começar:** o número de negócios cadastrados em destaque, a busca "O que você procura?" + "Onde?", atalhos e os tipos de negócio com seus totais.
+- **O diretório ganhou endereço próprio, `/explorar`.** Ele abre ao buscar ou ao escolher um tipo, com os filtros ao lado (tipo, causas, só verificados), grade ou lista e paginação numerada.
+- **Os filtros são links, não um formulário.** Cada opção é um link para a URL com aquele filtro trocado (`mudarFiltro`, em `src/lib/diretorio.ts`). Assim funciona sem JavaScript e toda busca pode ser compartilhada. Só a ordenação usa um `<select>` com JavaScript.
+- **Cada opção mostra quantos negócios aparecem ao marcá-la.** São poucas consultas por página: um `groupBy` por categoria ignorando os tipos marcados, e um `groupBy` das causas entre os resultados.
+- **O "Onde?" sugere só lugares com negócios** (`listarCidades`). A lista é pequena e vai pronta para o navegador. O texto escolhido ("Recife, PE") vai na URL e o servidor o interpreta, então digitar à mão também funciona.
+
 ---
 
 ## 4. Arquitetura
@@ -275,7 +306,7 @@ As linhas tracejadas são serviços opcionais. O site funciona sem eles.
 | Pasta | Conteúdo |
 | --- | --- |
 | `prisma/` | Esquema do banco (`schema.prisma`), migrações e dados de exemplo (`seed.ts`). |
-| `src/app/` | Páginas e rotas. Cada pasta é um endereço: `empresas/[usuario]` é o perfil, `painel/` é o painel do dono, `moderacao/` é a moderação, `api/` tem as rotas do Instagram. |
+| `src/app/` | Páginas e rotas. Cada pasta é um endereço: `explorar/` é o diretório, `empresas/[usuario]` é o perfil, `painel/` é o painel do dono, `moderacao/` é a moderação, `api/` tem as rotas do Instagram. |
 | `src/acoes/` | Server Actions, uma por formulário ou botão. Conferem a permissão e validam os dados. |
 | `src/lib/` | Regras de negócio e utilitários, sem interface: `reivindicacao.ts`, `consultas.ts`, `instagram.ts`, `causas.ts`, `cnpj.ts`, `formulario.ts`, `armazenamento.ts`, `auth/`… |
 | `src/components/` | Componentes de interface reutilizados entre páginas. |
@@ -411,8 +442,8 @@ npm run typecheck
 **Como um deploy acontece:**
 
 1. Cada PR para a `stage` ganha um **preview** do Vercel. O merge na `stage` atualiza o preview dela, que serve de homologação.
-2. Um PR da `stage` para a `main` leva o que foi homologado para produção. O merge na `main` dispara o deploy de produção no Vercel.
-   - Como só o squash é permitido, esse PR mostra também commits que já foram publicados. O merge leva para a `main` só o que ainda falta.
+2. Um PR da `stage` para a `main` leva o que foi homologado para produção. O merge na `main` dispara o deploy de produção no Vercel. O passo a passo está na receita [Publicar em produção](#publicar-em-produção).
+   - O merge é sempre com **"Create a merge commit"**, a única opção que o ruleset da `main` aceita. Com ele, a ponta da `stage` passa a fazer parte da história da `main`. Por isso o PR de publicação mostra só os commits que ainda não estão em produção e não conflita com o que já foi publicado.
 3. O `scripts/vercel-build.sh` aplica as migrações pendentes (`prisma migrate deploy`) usando a conexão direta do Neon. Depois, roda o build.
    - O build do preview, inclusive o da `stage`, não aplica migrações: só o de produção aplica.
    - Num PR que muda o banco, as telas que dependem da mudança podem falhar no preview e na `stage` até a mudança chegar à `main`. Teste essas telas no seu computador.
@@ -462,6 +493,12 @@ Para trocar o slug de uma causa existente, crie uma migração que atualize `Emp
 7. Atualize os dados de exemplo em `prisma/seed.ts`.
 8. Atualize a [seção 3 das regras de negócio](regras-de-negocio.md#dados-do-negócio).
 
+### Atualizar a lista de municípios
+
+1. Rode `npm run municipios:atualizar`. O script `scripts/municipios-ibge.ts` baixa a lista do IBGE e regrava `src/lib/municipios.json`.
+2. Confira no diff os municípios novos ou renomeados e rode `npm test`.
+3. Negócios de uma cidade renomeada continuam com o nome antigo até serem editados.
+
 ### Mudar uma regra da reivindicação
 
 1. Mude a regra em `src/lib/reivindicacao.ts`, não na tela.
@@ -490,6 +527,26 @@ Siga a seção "Ativando a rotina de fotos do Instagram" do [README](../README.m
 
 Siga as seções "Ativando…" do [README](../README.md#ativando-o-código-por-dm-opcional). Depois de ligar, atualize "Como funciona" (`src/app/sobre/page.tsx`), que hoje só descreve o envio de dados do negócio.
 
+### Publicar em produção
+
+1. Confira no preview da `stage` o que vai entrar.
+2. Abra o PR da própria `stage` para a `main`, com um título que resuma o que entra: `gh pr create --base main --head stage --title "Publica: …"`.
+3. Espere a checagem "Lint, tipos e testes" e faça o merge com **"Create a merge commit"**.
+   - A `main` exige 1 aprovação, e o GitHub não deixa aprovar o próprio PR. Quem administra marca **"Merge without waiting for requirements to be met (bypass rules)"** antes do merge.
+   - Não use o auto-merge: ele espera a aprovação, que não vai chegar, e esconde a opção de bypass. Se ele estiver ligado, clique em **Disable auto-merge**.
+4. Acompanhe o deploy de produção no Vercel.
+
+O PR só conflita se a `main` recebeu algo que não passou pela `stage`. Nesse caso:
+
+1. Crie um branch a partir da `stage` e traga a `main`, ficando com a versão da `stage` nos trechos em conflito:
+   ```bash
+   git fetch origin
+   git switch -c enhancement/<issue>-publica-<descricao> origin/stage
+   git merge -X ours origin/main
+   ```
+2. Confira com `git diff origin/stage`. Se sair vazio, a `main` não tinha nada além da `stage`. Se não sair, a `main` tem algo que a `stage` não tem: leve para a `stage` por um PR antes de publicar.
+3. Abra o PR desse branch para a `main` e faça o merge com **"Create a merge commit"**. Depois dele, a base comum volta a avançar.
+
 ---
 
 ## 9. Armadilhas conhecidas
@@ -513,8 +570,8 @@ O fluxo completo está no [CONTRIBUTING](../CONTRIBUTING.md). Em resumo:
 1. **Issue antes de codar,** com o label `bug`, `enhancement` ou `feature`.
 2. **Uma branch por issue,** criada a partir da `stage`, no formato `tipo/numero-da-issue-descricao-curta`. Exemplo: `bug/12-erro-no-login`.
 3. **Pull request para a `stage`,** com `Closes #N` ou `Refs #N`, explicando o que muda e por quê, com print se mexeu na interface.
-4. **A checagem "Lint, tipos e testes" e uma aprovação** antes do merge, sempre por squash.
-5. **Deploy só pelo merge.** A `stage` é a homologação, e um PR da `stage` para a `main` publica em produção. Nada de deploy manual.
+4. **A checagem "Lint, tipos e testes"** antes do merge, sempre por squash na `stage`. A publicação na `main` também precisa de uma aprovação.
+5. **Deploy só pelo merge.** A `stage` é a homologação, e um PR da `stage` para a `main`, com merge commit, publica em produção. Nada de deploy manual.
 
 E dois combinados que mantêm esta documentação útil:
 
