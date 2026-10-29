@@ -38,6 +38,14 @@ describe("limite por IP", () => {
     expect(await db.tentativaAcesso.count()).toBe(1);
   });
 
+  it("conta todas as tentativas simultâneas", async () => {
+    const resultados = await Promise.all(
+      Array.from({ length: LIMITE_POR_IP + 5 }, () => tentativaDoIpLiberada("200.0.0.1")),
+    );
+    expect(resultados.filter(Boolean)).toHaveLength(LIMITE_POR_IP);
+    expect(await db.tentativaAcesso.findFirst()).toMatchObject({ contagem: LIMITE_POR_IP + 5 });
+  });
+
   it("sem IP conhecido não limita", async () => {
     for (let i = 0; i <= LIMITE_POR_IP; i++) expect(await tentativaDoIpLiberada(null)).toBe(true);
   });
@@ -72,5 +80,14 @@ describe("limite por e-mail", () => {
     expect(await emailLiberado("ana@exemplo.com")).toBe(true);
     await registrarFalhaDoEmail("ana@exemplo.com");
     expect(await db.tentativaAcesso.findFirst()).toMatchObject({ contagem: 1 });
+  });
+
+  it("falhas simultâneas logo depois de a janela vencer abrem uma janela só, sem perder nenhuma", async () => {
+    for (let i = 0; i < LIMITE_POR_EMAIL; i++) await registrarFalhaDoEmail("ana@exemplo.com");
+    await vencerJanelas();
+    await Promise.all(Array.from({ length: 3 }, () => registrarFalhaDoEmail("ana@exemplo.com")));
+    const tentativa = await db.tentativaAcesso.findFirst();
+    expect(tentativa).toMatchObject({ contagem: 3 });
+    expect(tentativa!.janelaIniciadaEm.getTime()).toBeGreaterThan(Date.now() - 60_000);
   });
 });

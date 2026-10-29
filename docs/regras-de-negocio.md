@@ -847,6 +847,7 @@ Para uma ação nova de moderação, registre sempre na auditoria e dê a ela um
 | Depoimentos | `Depoimento` | **Públicos**, com nome e data. |
 | Quem denunciou e o motivo | `Depoimento` | Só a moderação. |
 | Auditoria | `RegistroAuditoria` | Só a moderação. |
+| Tentativas de login e cadastro | `TentativaAcesso` | Ninguém vê o IP nem o e-mail: só o sha256 deles e a contagem são guardados. A moderação vê só quantos contadores existem. |
 
 ### O que não fazemos
 

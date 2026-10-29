@@ -17,23 +17,23 @@ function inicioDaJanela(): Date {
   return new Date(Date.now() - JANELA_MS);
 }
 
-/** Soma uma tentativa à janela atual, ou abre uma janela nova se a anterior venceu. */
+/**
+ * Soma uma tentativa à janela atual, ou abre uma janela nova se a anterior venceu.
+ * É um comando só no banco, para tentativas simultâneas não se perderem.
+ */
 async function contar(chaveTentativa: string): Promise<number> {
-  const { count } = await db.tentativaAcesso.updateMany({
-    where: { chave: chaveTentativa, janelaIniciadaEm: { gte: inicioDaJanela() } },
-    data: { contagem: { increment: 1 } },
-  });
-  if (count === 0) {
-    const agora = new Date();
-    await db.tentativaAcesso.upsert({
-      where: { chave: chaveTentativa },
-      create: { chave: chaveTentativa, contagem: 1, janelaIniciadaEm: agora },
-      update: { contagem: 1, janelaIniciadaEm: agora },
-    });
-    return 1;
-  }
-  const tentativa = await db.tentativaAcesso.findUnique({ where: { chave: chaveTentativa } });
-  return tentativa?.contagem ?? 1;
+  const agora = new Date();
+  const inicio = new Date(agora.getTime() - JANELA_MS);
+  const [tentativa] = await db.$queryRaw<{ contagem: number }[]>`
+    INSERT INTO "TentativaAcesso" ("chave", "contagem", "janelaIniciadaEm")
+    VALUES (${chaveTentativa}, 1, ${agora})
+    ON CONFLICT ("chave") DO UPDATE SET
+      "contagem" = CASE WHEN "TentativaAcesso"."janelaIniciadaEm" >= ${inicio}
+        THEN "TentativaAcesso"."contagem" + 1 ELSE 1 END,
+      "janelaIniciadaEm" = CASE WHEN "TentativaAcesso"."janelaIniciadaEm" >= ${inicio}
+        THEN "TentativaAcesso"."janelaIniciadaEm" ELSE EXCLUDED."janelaIniciadaEm" END
+    RETURNING "contagem"`;
+  return tentativa!.contagem;
 }
 
 /**
