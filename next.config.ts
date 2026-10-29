@@ -9,6 +9,14 @@ const nextConfig: NextConfig = {
     serverActions: { bodySizeLimit: "4mb" },
   },
   partialPrefetching: true,
+  async redirects() {
+    return ["q", "causa", "uf", "pagina"].map((chave) => ({
+      source: "/",
+      has: [{ type: "query" as const, key: chave }],
+      destination: "/explorar",
+      permanent: false,
+    }));
+  },
   turbopack: {
     rules: {
       "*.css": {
