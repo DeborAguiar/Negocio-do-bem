@@ -206,6 +206,24 @@ No primeiro dia no ar, a fila da moderação chegou a 16 reivindicações e 20 i
 - **A consulta à Receita** voltou a funcionar ([#21](https://github.com/fabsreis/Negocio-do-bem/issues/21)). A BrasilAPI recusava o User-Agent padrão do `fetch` do Node e respondia 403.
 - **O risco aceito:** qualquer conta assume um perfil que ainda não tem dono. Uma verificação de verdade fica como próximo passo. Por exemplo, comparar o nome de quem pede com os sócios que a Receita devolve para o CNPJ.
 
+### 29 de outubro: homologação na `stage` ([#23](https://github.com/fabsreis/Negocio-do-bem/issues/23))
+
+Até aqui, o merge de um PR já publicava em produção. Para ter uma etapa de homologação entre o código revisado e o site no ar:
+
+- **A `stage` virou a branch padrão.** Os PRs do dia a dia vão para ela, e o preview dela no Vercel mostra o que vai para produção.
+- **Publicar é um PR da `stage` para a `main`.**
+- **Um ruleset protege `main`, `stage` e `releases/**`:** PR com 1 aprovação, a checagem "Lint, tipos e testes", só squash e histórico linear, sem force push e sem apagar a branch. Quem administra o repositório pode fazer o merge do próprio PR sem esperar aprovação, mas não pode dar push direto.
+
+### 29 de outubro: fotos de perfil pelo Instagram ([#31](https://github.com/fabsreis/Negocio-do-bem/issues/31))
+
+Muitos negócios ficavam sem foto até o dono entrar. A ideia era buscar a foto de perfil no Instagram, sem pesar no Vercel.
+
+- **Coleta direta, não.** Buscar a foto por endereços internos do Instagram vai contra os termos da Meta e costuma ser bloqueada. Foi descartada.
+- **API oficial, sim.** A Business Discovery devolve a foto de contas comerciais ou de criador em 1080×1080. Ela só existe no login pelo Facebook (`graph.facebook.com`), não no login pelo Instagram. Por isso o app "Negócio do Bem" da Meta é separado do ComentAI, e a conta que consulta (@ofabsreis) precisa estar ligada a uma Página do Facebook.
+- **O trabalho pesado fica num computador.** O script `scripts/fotos-instagram.ts` roda todo dia pelo launchd do macOS: busca, recorta e converte a foto, e envia pronta. O Vercel só confere e grava, por uma rota protegida por `FOTOS_TOKEN`.
+- **A foto do dono vence sempre.** A rotina só preenche negócio sem foto, e a gravação confere isso de novo no último instante.
+- **Pasta manual de reforço:** uma foto em `fotos-manuais/<@>.jpg` tem prioridade, para as contas que a API não alcança.
+
 ---
 
 ## 4. Arquitetura
@@ -367,7 +385,7 @@ npm run typecheck
 - **O banco de teste é separado** (`negocio_do_bem_teste`, ou o de `TEST_DATABASE_URL`).
   - Ele é criado na primeira execução e as tabelas são limpas entre os testes.
   - A suíte se recusa a rodar se o nome do banco não tiver "test", para nunca apagar dados de desenvolvimento.
-- **No GitHub,** o CI roda lint, tipos e testes num Postgres temporário em todo PR e a cada push na `main`.
+- **No GitHub,** o CI roda lint, tipos e testes num Postgres temporário em todo PR e a cada push na `stage` e na `main`.
 
 **A regra do projeto:** mudou uma regra em `src/lib/reivindicacao.ts`, atualize ou crie o teste em `tests/db/`. Para outras regras de `src/lib/`, um teste em `tests/unit/` é muito bem-vindo.
 
@@ -381,14 +399,16 @@ npm run typecheck
 | Banco | Neon (PostgreSQL), São Paulo | Conectado ao Vercel, que cria `DATABASE_URL` e `DATABASE_URL_UNPOOLED`. |
 | Fotos | Vercel Blob, público | Conectado ao Vercel, que cria `BLOB_READ_WRITE_TOKEN`. |
 | Medição | Google Analytics 4 | `NEXT_PUBLIC_GA_ID` só em Production. |
+| Fotos do Instagram | Script local (launchd) + app "Negócio do Bem" na Meta | `FOTOS_TOKEN` no Vercel; o resto fica no `.env.fotos` do computador que roda a rotina. |
 
 **Como um deploy acontece:**
 
-1. O merge na `main` dispara o deploy de produção no Vercel.
-2. O `scripts/vercel-build.sh` aplica as migrações pendentes (`prisma migrate deploy`) usando a conexão direta do Neon. Depois, roda o build.
-3. Cada PR ganha um **preview** do Vercel, que serve de homologação.
-   - O build do preview não aplica migrações: só o de produção aplica.
-   - Num PR que muda o banco, as telas que dependem da mudança podem falhar no preview. Teste essas telas no seu computador.
+1. Cada PR para a `stage` ganha um **preview** do Vercel. O merge na `stage` atualiza o preview dela, que serve de homologação.
+2. Um PR da `stage` para a `main` leva o que foi homologado para produção. O merge na `main` dispara o deploy de produção no Vercel.
+   - Como só o squash é permitido, esse PR mostra também commits que já foram publicados. O merge leva para a `main` só o que ainda falta.
+3. O `scripts/vercel-build.sh` aplica as migrações pendentes (`prisma migrate deploy`) usando a conexão direta do Neon. Depois, roda o build.
+   - O build do preview, inclusive o da `stage`, não aplica migrações: só o de produção aplica.
+   - Num PR que muda o banco, as telas que dependem da mudança podem falhar no preview e na `stage` até a mudança chegar à `main`. Teste essas telas no seu computador.
 
 **Variáveis de ambiente:**
 
@@ -400,6 +420,7 @@ npm run typecheck
 | `ADMIN_EMAILS` | Sim | E-mails da moderação, separados por vírgula. |
 | `BLOB_READ_WRITE_TOKEN` | Em produção | Fotos no Vercel Blob. |
 | `NEXT_PUBLIC_GA_ID` | Não | Google Analytics. Configure só em Production. |
+| `FOTOS_TOKEN` | Não | Liga a rota da rotina de fotos do Instagram. No mínimo 32 caracteres. |
 | `INSTAGRAM_PERFIL_OFICIAL` | Não | Liga o código por DM. |
 | `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET`, `INSTAGRAM_GRAPH_VERSION` | Não | Ligam o "Entrar com Instagram". |
 | `INSTAGRAM_ACCESS_TOKEN`, `INSTAGRAM_WEBHOOK_VERIFY_TOKEN` | Não | Ligam a confirmação automática da DM. |
@@ -453,6 +474,10 @@ Para trocar o slug de uma causa existente, crie uma migração que atualize `Emp
 2. Redirecione com `?aviso=<codigo>`.
 3. Confira se a página destino tem `<AvisoDaUrl codigo={aviso} />`.
 
+### Ligar a rotina de fotos do Instagram
+
+Siga a seção "Ativando a rotina de fotos do Instagram" do [README](../README.md#ativando-a-rotina-de-fotos-do-instagram-opcional). As regras estão na [seção 9 das regras de negócio](regras-de-negocio.md#rotina-de-fotos-do-instagram).
+
 ### Ligar a verificação pelo Instagram
 
 Siga as seções "Ativando…" do [README](../README.md#ativando-o-código-por-dm-opcional). Depois de ligar, atualize "Como funciona" (`src/app/sobre/page.tsx`), que hoje só descreve o envio de dados do negócio.
@@ -477,10 +502,10 @@ Siga as seções "Ativando…" do [README](../README.md#ativando-o-código-por-d
 O fluxo completo está no [CONTRIBUTING](../CONTRIBUTING.md). Em resumo:
 
 1. **Issue antes de codar,** com o label `bug`, `enhancement` ou `feature`.
-2. **Uma branch por issue,** no formato `tipo/numero-da-issue-descricao-curta`. Exemplo: `bug/12-erro-no-login`.
-3. **Pull request para a `main`,** com `Closes #N` ou `Refs #N`, explicando o que muda e por quê, com print se mexeu na interface.
-4. **A checagem "Lint, tipos e testes" e uma aprovação** antes do merge.
-5. **Deploy só pelo merge.** Nada de deploy manual.
+2. **Uma branch por issue,** criada a partir da `stage`, no formato `tipo/numero-da-issue-descricao-curta`. Exemplo: `bug/12-erro-no-login`.
+3. **Pull request para a `stage`,** com `Closes #N` ou `Refs #N`, explicando o que muda e por quê, com print se mexeu na interface.
+4. **A checagem "Lint, tipos e testes" e uma aprovação** antes do merge, sempre por squash.
+5. **Deploy só pelo merge.** A `stage` é a homologação, e um PR da `stage` para a `main` publica em produção. Nada de deploy manual.
 
 E dois combinados que mantêm esta documentação útil:
 
