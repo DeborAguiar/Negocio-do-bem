@@ -1,0 +1,76 @@
+import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import {
+  emailLiberado,
+  JANELA_MS,
+  LIMITE_POR_EMAIL,
+  LIMITE_POR_IP,
+  registrarFalhaDoEmail,
+  tentativaDoIpLiberada,
+  zerarTentativasDoEmail,
+} from "@/lib/auth/tentativas";
+import { db } from "@/lib/db";
+
+async function limparBanco() {
+  await db.$executeRawUnsafe(`TRUNCATE "TentativaAcesso"`);
+}
+
+async function vencerJanelas() {
+  await db.tentativaAcesso.updateMany({ data: { janelaIniciadaEm: new Date(Date.now() - JANELA_MS - 1000) } });
+}
+
+beforeEach(limparBanco);
+afterAll(async () => {
+  await limparBanco();
+  await db.$disconnect();
+});
+
+describe("limite por IP", () => {
+  it("libera até o limite e recusa a partir daí", async () => {
+    for (let i = 0; i < LIMITE_POR_IP; i++) expect(await tentativaDoIpLiberada("200.0.0.1")).toBe(true);
+    expect(await tentativaDoIpLiberada("200.0.0.1")).toBe(false);
+    expect(await tentativaDoIpLiberada("200.0.0.2")).toBe(true);
+  });
+
+  it("volta a liberar quando a janela vence, e apaga as janelas vencidas", async () => {
+    for (let i = 0; i <= LIMITE_POR_IP; i++) await tentativaDoIpLiberada("200.0.0.1");
+    await vencerJanelas();
+    expect(await tentativaDoIpLiberada("200.0.0.1")).toBe(true);
+    expect(await db.tentativaAcesso.count()).toBe(1);
+  });
+
+  it("sem IP conhecido não limita", async () => {
+    for (let i = 0; i <= LIMITE_POR_IP; i++) expect(await tentativaDoIpLiberada(null)).toBe(true);
+  });
+
+  it("guarda o hash do IP, e não o IP", async () => {
+    await tentativaDoIpLiberada("200.0.0.1");
+    const [tentativa] = await db.tentativaAcesso.findMany();
+    expect(tentativa!.chave).toMatch(/^[0-9a-f]{64}$/);
+  });
+});
+
+describe("limite por e-mail", () => {
+  it("recusa depois de 5 senhas erradas, só para aquele e-mail", async () => {
+    for (let i = 0; i < LIMITE_POR_EMAIL; i++) {
+      expect(await emailLiberado("ana@exemplo.com")).toBe(true);
+      await registrarFalhaDoEmail("ana@exemplo.com");
+    }
+    expect(await emailLiberado("ana@exemplo.com")).toBe(false);
+    expect(await emailLiberado("joao@exemplo.com")).toBe(true);
+  });
+
+  it("um login certo zera a contagem", async () => {
+    for (let i = 0; i < LIMITE_POR_EMAIL - 1; i++) await registrarFalhaDoEmail("ana@exemplo.com");
+    await zerarTentativasDoEmail("ana@exemplo.com");
+    for (let i = 0; i < LIMITE_POR_EMAIL - 1; i++) await registrarFalhaDoEmail("ana@exemplo.com");
+    expect(await emailLiberado("ana@exemplo.com")).toBe(true);
+  });
+
+  it("volta a liberar quando a janela vence", async () => {
+    for (let i = 0; i < LIMITE_POR_EMAIL; i++) await registrarFalhaDoEmail("ana@exemplo.com");
+    await vencerJanelas();
+    expect(await emailLiberado("ana@exemplo.com")).toBe(true);
+    await registrarFalhaDoEmail("ana@exemplo.com");
+    expect(await db.tentativaAcesso.findFirst()).toMatchObject({ contagem: 1 });
+  });
+});

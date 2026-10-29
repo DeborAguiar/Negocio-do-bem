@@ -297,6 +297,8 @@ Os previews também usavam o Vercel Blob de produção, onde ficam as fotos. Ent
 
 A autenticação é feita no próprio projeto (`src/lib/auth/`), com e-mail, senha (scrypt) e sessão em cookie. Isso evita depender de um serviço externo para algo simples.
 
+O scrypt que protege as senhas custa ~32 MB de memória por conferência, então login e cadastro têm limite de tentativas por IP e por e-mail, conferido antes dele (`src/lib/auth/tentativas.ts`). A contagem fica numa tabela do Postgres (`TentativaAcesso`), e não na memória, porque no Vercel o site roda em várias instâncias. Um serviço próprio para contadores (Upstash, Vercel KV) traria mais uma dependência e mais uma variável.
+
 Como o e-mail do cadastro não é confirmado, ele nunca dá permissão. A moderação vem só do `papel` gravado no banco, conferido no servidor a cada requisição, e quem cuida do projeto dá esse papel com `npm run moderacao`. Até outubro de 2026 a variável `ADMIN_EMAILS` também dava moderação, e qualquer pessoa que se cadastrasse com um daqueles e-mails antes do dono levava o acesso.
 
 ### Como uma requisição anda

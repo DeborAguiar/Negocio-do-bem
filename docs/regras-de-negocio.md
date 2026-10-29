@@ -60,6 +60,11 @@ Código: `src/acoes/conta.ts`, `src/lib/auth/`.
 - **Login** (`/entrar`): e-mail e senha.
   - O erro é sempre o mesmo, "E-mail ou senha incorretos".
   - Quando o e-mail não existe, a senha é conferida contra um hash falso, para a resposta levar o mesmo tempo e não revelar quais e-mails têm conta.
+- **Limite de tentativas** (`src/lib/auth/tentativas.ts`), conferido antes do scrypt, porque cada conferência de senha custa ~32 MB de memória:
+  - **por IP:** 10 tentativas de login ou cadastro, somadas, a cada 15 minutos. Sem IP conhecido (fora do Vercel), não há limite por IP;
+  - **por e-mail:** 5 senhas erradas a cada 15 minutos. Um login certo zera a contagem daquele e-mail;
+  - no login, a recusa pelo limite mostra o mesmo "E-mail ou senha incorretos", para não revelar quais e-mails existem. No cadastro, aparece "Muitas tentativas seguidas. Espere alguns minutos e tente de novo";
+  - o banco guarda só o hash (sha256) do IP e do e-mail, e as janelas vencidas são apagadas na tentativa seguinte.
 - **Senha:**
   - guardada com scrypt (N=2^15, r=8, p=1, sal aleatório de 16 bytes) no formato `scrypt$N$r$p$sal$hash`;
   - a comparação é em tempo constante.
@@ -764,6 +769,8 @@ Para uma ação nova de moderação, registre sempre na auditoria.
 | --- | --- | --- |
 | Duração da sessão | 30 dias | `src/lib/auth/sessao.ts` |
 | Senha | 8 a 200 caracteres | `src/acoes/conta.ts` |
+| Tentativas de login e cadastro por IP | 10 a cada 15 minutos | `src/lib/auth/tentativas.ts` |
+| Senhas erradas por e-mail | 5 a cada 15 minutos | `src/lib/auth/tentativas.ts` |
 | Indicações por conta | 10 a cada 24 horas | `src/acoes/empresas.ts` |
 | Pedidos de reivindicação por conta | 10 a cada 24 horas | `src/lib/reivindicacao.ts` |
 | Validade do código por DM | 48 horas | `src/lib/reivindicacao.ts` |
@@ -819,7 +826,6 @@ O sistema funciona hoje assim. Algumas destas situações podem ser intencionais
 **Contas**
 
 - Não há recuperação de senha, confirmação de e-mail, troca de nome ou e-mail, nem exclusão da conta.
-- Não há limite de tentativas de login.
 - Sessões vencidas deixam de valer, mas não são apagadas do banco.
 - Ninguém recebe e-mail: nem o dono quando o pedido é decidido, nem a moderação quando chega algo novo. Hoje o site não tem serviço de envio de e-mail.
 

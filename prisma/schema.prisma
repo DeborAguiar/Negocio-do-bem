@@ -42,6 +42,14 @@ model Sessao {
   @@index([usuarioId])
 }
 
+model TentativaAcesso {
+  chave            String   @id
+  contagem         Int
+  janelaIniciadaEm DateTime
+
+  @@index([janelaIniciadaEm])
+}
+
 model Empresa {
   id                String   @id @default(cuid())
   // @ atual do Instagram, minúsculo e sem "@". Também é o endereço da página.
