@@ -30,7 +30,7 @@ export const AVISOS: Record<string, { tipo: TipoAviso; texto: string }> = {
   ig_cancelado: { tipo: "erro", texto: "O login no Instagram foi cancelado. Nada foi alterado." },
   ig_erro: {
     tipo: "erro",
-    texto: "Não conseguimos confirmar sua conta com o Instagram agora. Tente de novo ou use o código por DM.",
+    texto: "Não conseguimos confirmar sua conta com o Instagram agora. Tente de novo ou envie os dados do negócio.",
   },
   ig_indisponivel: {
     tipo: "erro",

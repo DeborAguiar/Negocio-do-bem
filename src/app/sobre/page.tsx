@@ -34,8 +34,8 @@ export default function Sobre() {
             rápida evita spam e perfis falsos.
           </li>
           <li>
-            <strong>O dono assume o perfil</strong> provando que controla aquele Instagram. A partir daí, só ele edita as
-            informações.
+            <strong>O dono assume o perfil</strong> enviando os dados do negócio, que a moderação confere. A partir daí,
+            só ele edita as informações.
           </li>
           <li>
             <strong>A comunidade fortalece</strong> deixando depoimentos e buscando pelas causas que importam.
@@ -48,24 +48,12 @@ export default function Sobre() {
         <p>
           Procure seu negócio no{" "}
           <Link href="/#diretorio">diretório</Link> e clique em <strong>&ldquo;Sou o dono&rdquo;</strong>. Se ele ainda não
-          estiver lá, <Link href="/indicar">cadastre</Link> marcando &ldquo;Este negócio é meu&rdquo;. Para provar que o
-          negócio é seu, existem três caminhos:
+          estiver lá, <Link href="/indicar">cadastre</Link> marcando &ldquo;Este negócio é meu&rdquo;.
         </p>
-        <ul>
-          <li>
-            <strong>Entrar com Instagram</strong>, a forma mais rápida: você faz login na conta do negócio e o Instagram
-            confirma pra gente qual é o @. Funciona com contas comerciais ou de criador de conteúdo. Só lemos o nome de
-            usuário e o identificador da conta: não guardamos acesso nenhum.
-          </li>
-          <li>
-            <strong>Código por DM:</strong> geramos um código e você manda por mensagem direta, a partir do Instagram do
-            negócio, para o nosso perfil oficial. Funciona com qualquer tipo de conta.
-          </li>
-          <li>
-            <strong>Documento:</strong> se você não tem acesso ao Instagram, envie CNPJ ou MEI e um contato. A moderação
-            analisa com cuidado.
-          </li>
-        </ul>
+        <p>
+          Depois, envie os dados do negócio: CNPJ ou MEI (se tiver), site e um contato. A moderação confere esses dados
+          com o @ do Instagram e aprova, normalmente em até um dia útil. O resultado aparece no seu painel.
+        </p>
         <p>
           Se outra pessoa já assumiu o seu perfil, use a mesma página para pedir a revisão. Qualquer disputa vai para a
           moderação, e todas as decisões ficam registradas.
@@ -75,8 +63,8 @@ export default function Sobre() {
           Privacidade e remoção
         </h2>
         <p>
-          <strong>Meu negócio foi indicado e eu não quero aparecer.</strong> Sem problema: assuma o perfil por um dos
-          caminhos acima e, no painel, clique em &ldquo;Ocultar meu negócio&rdquo;. Ele sai do diretório na hora.
+          <strong>Meu negócio foi indicado e eu não quero aparecer.</strong> Sem problema: assuma o perfil como explicado
+          acima e, no painel, clique em &ldquo;Ocultar meu negócio&rdquo;. Ele sai do diretório na hora.
         </p>
         <p>
           <strong>Que dados vocês guardam?</strong> Da sua conta, nome e e-mail. Dos negócios, só o que aparece no perfil.

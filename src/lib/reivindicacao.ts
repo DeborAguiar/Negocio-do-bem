@@ -1,11 +1,13 @@
 // Regras para o dono reivindicar o perfil do seu negócio.
 //
-// Reivindicar é provar que você controla o @ do Instagram do negócio. Há três
-// caminhos (ver README):
+// Há três caminhos (ver README):
+//   - "documento": o caminho principal. A pessoa envia os dados do negócio (CNPJ,
+//     site, contato) e a moderação confere com o @ do Instagram antes de aprovar.
 //   - "instagram_login": login na conta profissional; aprovação instantânea.
+//     Desligado enquanto as variáveis do app da Meta estiverem vazias.
 //   - "codigo_dm": o dono manda um código por DM, a partir do @ do negócio, para o
 //     perfil oficial. A moderação confere (ou o webhook confere sozinho).
-//   - "documento": CNPJ/MEI e contato, analisados pela moderação.
+//     Desligado enquanto INSTAGRAM_PERFIL_OFICIAL estiver vazio.
 //
 // A aprovação automática só acontece quando não há nenhum conflito. Qualquer
 // situação estranha (negócio que já tem dono, @ que mudou de conta, mesma conta
@@ -202,6 +204,7 @@ export async function solicitarPorDocumento(params: {
   empresaId: string;
   usuarioId: string;
   cnpj: string | null;
+  site: string | null;
   relacao: string;
   contato: string;
   mensagem: string | null;
@@ -210,7 +213,7 @@ export async function solicitarPorDocumento(params: {
   const emAnalise = await db.reivindicacao.findFirst({
     where: { empresaId: params.empresaId, usuarioId: params.usuarioId, metodo: "documento", status: "pendente" },
   });
-  if (emAnalise) throw new ErroReivindicacao("Você já tem uma solicitação por documento em análise.");
+  if (emAnalise) throw new ErroReivindicacao("Você já enviou os dados deste negócio e eles estão em análise.");
   await exigirLimiteDiario(params.usuarioId);
 
   return db.reivindicacao.create({
@@ -219,6 +222,7 @@ export async function solicitarPorDocumento(params: {
       usuarioId: params.usuarioId,
       metodo: "documento",
       cnpj: params.cnpj,
+      site: params.site,
       relacao: params.relacao,
       contato: params.contato,
       mensagem: params.mensagem,

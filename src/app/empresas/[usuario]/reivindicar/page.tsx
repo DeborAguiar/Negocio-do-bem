@@ -51,9 +51,9 @@ async function Reivindicar({
         Este negócio é seu?
       </h1>
       <p className="text-lg leading-relaxed text-suave">
-        Para proteger cada negócio, só quem controla o Instagram{" "}
-        <strong className="font-semibold text-tinta">@{username}</strong> pode assumir este perfil. Depois disso, você
-        conta a sua história, escolhe as causas e responde à comunidade.
+        Para proteger cada negócio, a moderação confere quem assume o perfil de{" "}
+        <strong className="font-semibold text-tinta">@{username}</strong>. Depois disso, você conta a sua história,
+        escolhe as causas e responde à comunidade.
       </p>
       <AvisoDaUrl codigo={busca.aviso} />
       {busca.aviso === "ig_conta_diferente" && conectada && (
@@ -108,9 +108,11 @@ async function Reivindicar({
     (r) => r.metodo === "codigo_dm" && r.status === "pendente" && r.expiraEm > agora,
   );
   const outrasPendentes = solicitacoes.filter((r) => r.status === "pendente" && r.id !== codigoVigente?.id);
+  const dadosEmAnalise = outrasPendentes.some((r) => r.metodo === "documento");
   const loginDisponivel = !!configLogin();
   const confirmacaoAutomatica = !!configWebhook();
   const oficial = perfilOficial();
+  const outrosCaminhos = loginDisponivel || !!oficial;
 
   return (
     <>
@@ -119,8 +121,8 @@ async function Reivindicar({
       {empresa.membros.length > 0 && (
         <div className="mb-6">
           <Aviso tipo="info">
-            Este perfil já tem um dono verificado. Se você também cuida deste Instagram ou se houve troca de
-            responsáveis, faça a verificação abaixo: a solicitação vai para a moderação, que decide com cuidado.
+            Este perfil já tem um dono. Se você também cuida deste negócio ou se houve troca de responsáveis, envie
+            seus dados abaixo: a solicitação vai para a moderação, que decide com cuidado.
           </Aviso>
         </div>
       )}
@@ -162,74 +164,95 @@ async function Reivindicar({
           </section>
         )}
 
-        <section id="codigo" className="cartao scroll-mt-24 p-6 sm:p-8">
-          <h2 className="font-serif text-2xl font-semibold">
-            {loginDisponivel ? "Ou mande um código por DM" : "Mande um código por DM"}
-          </h2>
-          <p className="mt-2 leading-relaxed text-suave">
-            Funciona com qualquer conta do Instagram, inclusive pessoal.
-          </p>
+        {oficial && (
+          <section id="codigo" className="cartao scroll-mt-24 p-6 sm:p-8">
+            <h2 className="font-serif text-2xl font-semibold">
+              {loginDisponivel ? "Ou mande um código por DM" : "Mande um código por DM"}
+            </h2>
+            <p className="mt-2 leading-relaxed text-suave">
+              Funciona com qualquer conta do Instagram, inclusive pessoal.
+            </p>
 
-          {codigoVigente?.codigo ? (
-            <div className="mt-6 space-y-5">
-              <ol className="space-y-4">
-                <Passo numero={1}>
-                  Abra o Instagram logado como <strong>@{username}</strong>, a conta do negócio.
-                </Passo>
-                <Passo numero={2}>
-                  Envie uma DM para <strong>@{oficial}</strong> só com este código:
-                  <CopiarCodigo codigo={codigoVigente.codigo} />
-                  <a
-                    href={`https://ig.me/m/${oficial}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="link mt-3 inline-block text-sm"
-                  >
-                    Abrir conversa com @{oficial} ↗
-                  </a>
-                </Passo>
-                <Passo numero={3}>
-                  {confirmacaoAutomatica
-                    ? "Pronto! A confirmação é automática e leva poucos minutos. Atualize esta página para ver."
-                    : "Pronto! A moderação confere a mensagem e aprova, normalmente em até um dia útil. O resultado aparece no seu painel."}
-                </Passo>
-              </ol>
-              <Aviso tipo="erro">
-                <strong>Nunca envie um código que outra pessoa te passou.</strong> Quem gerou o código é quem vira dono
-                do perfil.
-              </Aviso>
-              <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-suave">
-                <span>O código vale até {formatarDataHora(codigoVigente.expiraEm)}.</span>
-                <form action={cancelarReivindicacao}>
-                  <input type="hidden" name="empresaId" value={empresa.id} />
-                  <input type="hidden" name="reivindicacaoId" value={codigoVigente.id} />
-                  <BotaoEnviar className="underline hover:text-coral-700" enviando="Cancelando…">
-                    Cancelar código
-                  </BotaoEnviar>
-                </form>
+            {codigoVigente?.codigo ? (
+              <div className="mt-6 space-y-5">
+                <ol className="space-y-4">
+                  <Passo numero={1}>
+                    Abra o Instagram logado como <strong>@{username}</strong>, a conta do negócio.
+                  </Passo>
+                  <Passo numero={2}>
+                    Envie uma DM para <strong>@{oficial}</strong> só com este código:
+                    <CopiarCodigo codigo={codigoVigente.codigo} />
+                    <a
+                      href={`https://ig.me/m/${oficial}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="link mt-3 inline-block text-sm"
+                    >
+                      Abrir conversa com @{oficial} ↗
+                    </a>
+                  </Passo>
+                  <Passo numero={3}>
+                    {confirmacaoAutomatica
+                      ? "Pronto! A confirmação é automática e leva poucos minutos. Atualize esta página para ver."
+                      : "Pronto! A moderação confere a mensagem e aprova, normalmente em até um dia útil. O resultado aparece no seu painel."}
+                  </Passo>
+                </ol>
+                <Aviso tipo="erro">
+                  <strong>Nunca envie um código que outra pessoa te passou.</strong> Quem gerou o código é quem vira dono
+                  do perfil.
+                </Aviso>
+                <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-suave">
+                  <span>O código vale até {formatarDataHora(codigoVigente.expiraEm)}.</span>
+                  <form action={cancelarReivindicacao}>
+                    <input type="hidden" name="empresaId" value={empresa.id} />
+                    <input type="hidden" name="reivindicacaoId" value={codigoVigente.id} />
+                    <BotaoEnviar className="underline hover:text-coral-700" enviando="Cancelando…">
+                      Cancelar código
+                    </BotaoEnviar>
+                  </form>
+                </div>
               </div>
-            </div>
-          ) : (
-            <FormGerarCodigo empresaId={empresa.id} />
-          )}
-        </section>
+            ) : (
+              <FormGerarCodigo empresaId={empresa.id} />
+            )}
+          </section>
+        )}
 
-        <details className="group cartao p-6 sm:p-8">
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-4 [&::-webkit-details-marker]:hidden">
-            <span>
-              <span className="block font-serif text-2xl font-semibold">Não tenho acesso ao Instagram do negócio</span>
-              <span className="mt-1 block text-suave">Envie seus dados para a moderação analisar.</span>
-            </span>
-            <span aria-hidden="true" className="text-2xl text-suave transition group-open:rotate-45">
-              +
-            </span>
-          </summary>
-          <FormDocumento empresaId={empresa.id} />
-        </details>
+        {dadosEmAnalise ? (
+          <Aviso tipo="info">
+            Seus dados estão com a moderação. O resultado aparece no{" "}
+            <Link href="/painel" className="font-semibold underline">
+              seu painel
+            </Link>
+            .
+          </Aviso>
+        ) : outrosCaminhos ? (
+          <details className="group cartao p-6 sm:p-8">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-4 [&::-webkit-details-marker]:hidden">
+              <span>
+                <span className="block font-serif text-2xl font-semibold">Não tenho acesso ao Instagram do negócio</span>
+                <span className="mt-1 block text-suave">Envie os dados do negócio para a moderação analisar.</span>
+              </span>
+              <span aria-hidden="true" className="text-2xl text-suave transition group-open:rotate-45">
+                +
+              </span>
+            </summary>
+            <FormDocumento empresaId={empresa.id} />
+          </details>
+        ) : (
+          <section className="cartao p-6 sm:p-8">
+            <h2 className="font-serif text-2xl font-semibold">Envie os dados do negócio</h2>
+            <p className="mt-2 leading-relaxed text-suave">
+              A moderação confere o CNPJ e o site com o Instagram <strong>@{username}</strong> e aprova, normalmente em
+              até um dia útil. O resultado aparece no seu painel.
+            </p>
+            <FormDocumento empresaId={empresa.id} />
+          </section>
+        )}
       </div>
 
       <p className="mt-10 text-center text-sm leading-relaxed text-suave">
-        Pedimos essa prova para que ninguém consiga se passar pelo seu negócio. Dúvidas?{" "}
+        Conferimos esses dados para que ninguém consiga se passar pelo seu negócio. Dúvidas?{" "}
         <Link href="/sobre#dono" className="link">
           Veja como funciona
         </Link>

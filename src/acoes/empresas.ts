@@ -7,7 +7,7 @@ import { exigirUsuario } from "@/lib/auth/sessao";
 import { filtrarCausas } from "@/lib/causas";
 import { db } from "@/lib/db";
 import { CATEGORIAS, UFS } from "@/lib/dominio";
-import { errosPorCampo, texto, valoresDoFormulario, type EstadoFormulario } from "@/lib/formulario";
+import { campoSite, errosPorCampo, texto, valoresDoFormulario, type EstadoFormulario } from "@/lib/formulario";
 import { normalizarUsername } from "@/lib/instagram";
 import { textoDeBusca } from "@/lib/texto";
 
@@ -92,22 +92,7 @@ export async function indicarEmpresa(_estado: EstadoFormulario, dados: FormData)
 const esquemaEdicao = z.object({
   ...camposComuns,
   historia: z.string().max(20_000, "A história pode ter até 20 mil caracteres.").default(""),
-  site: z
-    .string()
-    .trim()
-    .max(200)
-    .transform((valor, ctx) => {
-      if (!valor) return null;
-      const comProtocolo = /^https?:\/\//i.test(valor) ? valor : `https://${valor}`;
-      try {
-        const url = new URL(comProtocolo);
-        if (!url.hostname.includes(".")) throw new Error();
-        return url.toString();
-      } catch {
-        ctx.addIssue({ code: "custom", message: "Digite um endereço válido (ex.: www.meunegocio.com.br)." });
-        return z.NEVER;
-      }
-    }),
+  site: campoSite,
 });
 
 async function exigirDono(empresaId: string, voltarPara: string) {

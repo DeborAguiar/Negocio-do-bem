@@ -238,14 +238,17 @@ async function main() {
     });
   }
 
-  // Uma reivindicação por DM esperando a moderação, para ver o fluxo funcionando.
+  // Uma reivindicação esperando a moderação, para ver o fluxo funcionando.
   await db.reivindicacao.create({
     data: {
       empresaId: empresas.get("cafe.arcoiris.exemplo")!,
       usuarioId: pessoas.carla.id,
-      metodo: "codigo_dm",
-      codigo: "BEM-CAFE42",
-      expiraEm: new Date(Date.now() + 48 * 60 * 60 * 1000),
+      metodo: "documento",
+      cnpj: "11222333000181",
+      site: "https://cafearcoiris.example.com/",
+      relacao: "Sou sócia e cuido do Instagram do café",
+      contato: "carla@exemplo.com",
+      expiraEm: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
     },
   });
 

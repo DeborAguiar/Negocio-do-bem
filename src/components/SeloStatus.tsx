@@ -2,7 +2,7 @@ export function SeloStatus({ status }: { status: string }) {
   if (status === "verificada") {
     return (
       <span
-        title="O dono provou que controla o Instagram deste negócio"
+        title="O dono assumiu este perfil e a moderação conferiu os dados do negócio"
         className="inline-flex items-center gap-1 rounded-full bg-folha-50 px-2.5 py-1 text-xs font-semibold text-folha"
       >
         <svg viewBox="0 0 20 20" className="h-3.5 w-3.5" aria-hidden="true">

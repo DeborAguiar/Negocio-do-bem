@@ -115,8 +115,9 @@ model Reivindicacao {
   codigo          String?   @unique
   // "pendente" | "aprovada" | "recusada" | "expirada" | "cancelada"
   status          String    @default("pendente")
-  // Método "documento"
+  // Método "documento" (dados do negócio conferidos pela moderação)
   cnpj            String?
+  site            String?
   relacao         String?
   contato         String?
   mensagem        String?

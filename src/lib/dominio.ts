@@ -27,7 +27,7 @@ export const UFS = [
 export const METODOS_REIVINDICACAO: Record<string, string> = {
   instagram_login: "Entrar com Instagram",
   codigo_dm: "Código por DM",
-  documento: "Documento",
+  documento: "Dados do negócio",
 };
 
 export const STATUS_REIVINDICACAO: Record<string, string> = {

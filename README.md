@@ -33,7 +33,7 @@ O seed cria negócios fictícios e estas contas, todas com a senha `senha-demo-1
 | --- | --- |
 | `moderacao@exemplo.com` | moderação |
 | `ana@exemplo.com`, `joao@exemplo.com`, `bia@exemplo.com` | donos de negócios de exemplo |
-| `carla@exemplo.com` | tem uma reivindicação por DM esperando a moderação (código `BEM-CAFE42`) |
+| `carla@exemplo.com` | enviou os dados do Café Arco-Íris e espera a moderação |
 
 Quem estiver em `ADMIN_EMAILS` vira moderador ao entrar.
 
@@ -46,27 +46,37 @@ Quem estiver em `ADMIN_EMAILS` vira moderador ao entrar.
 
 ## Como o dono reivindica o negócio
 
-Reivindicar é **provar que você controla o @ do Instagram** do negócio. Há três caminhos, e todos começam no botão "Sou o dono" do perfil (`/empresas/<@>/reivindicar`):
+Tudo começa no botão "Sou o dono" do perfil (`/empresas/<@>/reivindicar`). Por enquanto, o caminho é um só: a pessoa envia os **dados do negócio** e a moderação confere antes de aprovar.
 
-| Caminho | Aceita conta pessoal? | Como é aprovado |
+- **CNPJ ou MEI** (opcional): a moderação vê o CNPJ formatado e os dados da Receita ao lado.
+- **Site** (opcional): aparece como link na ficha da moderação.
+- **Instagram**: é o @ do próprio perfil, que a moderação abre para comparar com o CNPJ e o site.
+- **Relação com o negócio** e **contato** (obrigatórios), para a moderação tirar dúvidas.
+
+Duas formas automáticas de verificação já estão no código, mas ficam **desligadas** até você preencher as variáveis no `.env`:
+
+| Caminho | Liga quando | Como é aprovado |
 | --- | --- | --- |
-| **Entrar com Instagram** | Não (só contas comerciais ou de criador de conteúdo) | Na hora, se o @ conectado for o do negócio |
-| **Código por DM** | Sim | Pela moderação, ou sozinho se o webhook estiver configurado |
-| **Documento (CNPJ/MEI)** | Sim | Pela moderação |
+| **Entrar com Instagram** | `INSTAGRAM_APP_ID` e `INSTAGRAM_APP_SECRET` preenchidos | Na hora, se o @ conectado for o do negócio (só contas comerciais ou de criador) |
+| **Código por DM** | `INSTAGRAM_PERFIL_OFICIAL` preenchido | Pela moderação, ou sozinho se o webhook estiver configurado |
+
+Com algum deles ligado, o envio de dados vira a opção "Não tenho acesso ao Instagram do negócio". Se ligar um deles, atualize também o texto de `src/app/sobre/page.tsx`, que hoje só descreve o envio de dados.
 
 Regras que protegem os negócios (em `src/lib/reivindicacao.ts`):
 
-- O perfil fica ligado ao **ID da conta do Instagram**, não só ao @. Se um @ mudar de dono, a verificação nova vai para análise em vez de ser aprovada sozinha.
+- Nos caminhos pelo Instagram, o perfil fica ligado ao **ID da conta**, não só ao @. Se um @ mudar de dono, a verificação nova vai para análise em vez de ser aprovada sozinha.
 - **Não existe aprovação automática quando há conflito**: o negócio já tem dono, o ID da conta é diferente do registrado ou a conta já está ligada a outro perfil. Nesses casos a moderação decide se adiciona a pessoa como co-dona ou transfere o perfil.
-- O código da DM vale 48 horas, fica preso à conta de quem o gerou e só é aceito se vier do @ do negócio. A tela avisa para nunca enviar um código passado por outra pessoa.
+- Quando ligado, o código da DM vale 48 horas, fica preso à conta de quem o gerou e só é aceito se vier do @ do negócio. A tela avisa para nunca enviar um código passado por outra pessoa.
 - Cada pessoa pode fazer no máximo 10 solicitações e 10 indicações por dia.
 - Toda aprovação, recusa, edição e decisão de moderação fica registrada na auditoria (`/moderacao?aba=auditoria`).
 - Donos respondem depoimentos, mas não apagam. Uma denúncia não esconde o depoimento: só a moderação remove.
 - O dono pode **ocultar** o negócio do diretório a qualquer momento, por exemplo se foi indicado e não quer aparecer.
 
-Sem nenhuma configuração da Meta, o site já funciona com o código por DM conferido pela moderação e com o envio de documento. O botão "Entrar com Instagram" só aparece quando as variáveis do app estiverem preenchidas.
+### Ativando o código por DM (opcional)
 
-### Ativando o "Entrar com Instagram"
+Preencha `INSTAGRAM_PERFIL_OFICIAL` com o @ do perfil oficial do Negócio do Bem, que recebe as DMs. A moderação confere cada DM e localiza o pedido pelo código na aba de reivindicações. Para a confirmação ser automática, veja a seção do webhook abaixo.
+
+### Ativando o "Entrar com Instagram" (opcional)
 
 > Os nomes de telas e permissões da Meta mudam com frequência. Confira a [documentação oficial](https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login) antes de configurar.
 
@@ -118,6 +128,7 @@ tests/               testes (unit/ sem banco, db/ com banco)
 
 ## Próximos passos sugeridos
 
+- Uma verificação mais automática para o dono: hoje a moderação confere CNPJ, site e Instagram à mão.
 - Recuperação de senha e confirmação de e-mail (precisa de um serviço de envio de e-mail).
 - Limite de tentativas de login por IP.
 - Avisar o dono por e-mail quando a reivindicação for decidida ou quando chegar um depoimento.

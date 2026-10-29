@@ -35,6 +35,9 @@ export function FormDocumento({ empresaId }: { empresaId: string }) {
       <Campo id="cnpj" rotulo="CNPJ ou MEI (opcional)" erro={estado?.erros?.cnpj} ajuda="Ajuda a moderação a conferir o registro do negócio.">
         <input id="cnpj" name="cnpj" maxLength={20} placeholder="00.000.000/0000-00" defaultValue={valor("cnpj")} className="campo" />
       </Campo>
+      <Campo id="site" rotulo="Site do negócio (opcional)" erro={estado?.erros?.site}>
+        <input id="site" name="site" maxLength={200} placeholder="www.meunegocio.com.br" defaultValue={valor("site")} className="campo" autoCapitalize="none" />
+      </Campo>
       <Campo id="contato" rotulo="Como a moderação fala com você?" erro={estado?.erros?.contato}>
         <input id="contato" name="contato" required maxLength={160} placeholder="WhatsApp ou e-mail do negócio" defaultValue={valor("contato")} className="campo" />
       </Campo>
