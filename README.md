@@ -137,7 +137,8 @@ Funciona em qualquer hospedagem de Next.js com um PostgreSQL gerenciado.
 
 1. Em **Storage**, crie um banco **Neon** e conecte ao projeto sem prefixo, para as variáveis se chamarem `DATABASE_URL` e `DATABASE_URL_UNPOOLED`.
 2. Em **Environment Variables**, configure `ADMIN_EMAILS` e `APP_URL` (o domínio público, como `https://seu-projeto.vercel.app`). As do Instagram são opcionais.
-3. Em **Storage**, crie um **Blob** com acesso público e conecte ao projeto só no ambiente **Production**, sem mudar o prefixo, para a variável se chamar `BLOB_READ_WRITE_TOKEN`. É onde ficam as fotos dos perfis e das histórias.
+3. Em **Storage**, crie um **Blob** com acesso público e conecte ao projeto só no ambiente **Production**. Não mude o prefixo e marque a opção de criar a `BLOB_READ_WRITE_TOKEN`: o site só usa o Blob quando ela existe. É onde ficam as fotos dos perfis e das histórias.
+   - Crie o Blob pelo Storage da conta, e não pelo do projeto: criado dentro do projeto, ele já se conecta a Production e Preview.
 4. Crie um **segundo Blob** público, só para os previews, e conecte do mesmo jeito, só no ambiente **Preview**. Assim, o código de um PR nunca grava nem apaga as fotos de produção.
 5. Opcional: em **Environment Variables**, só para **Production**, configure `NEXT_PUBLIC_GA_ID` com o ID de medição do Google Analytics (`G-…`). Sem ela, o Analytics não carrega.
 6. Pronto. A cada deploy de produção, o `scripts/vercel-build.sh` aplica as migrações pendentes antes do build.

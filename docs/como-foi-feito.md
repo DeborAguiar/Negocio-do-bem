@@ -218,7 +218,7 @@ Até aqui, o merge de um PR já publicava em produção. Para ter uma etapa de h
 
 Os previews também usavam o Vercel Blob de produção, onde ficam as fotos. Então o código de um PR podia gravar e apagar as fotos reais.
 
-- **O Preview ganhou um Blob público próprio,** e o de produção ficou só em Production. O token de cada Blob só alcança os arquivos dele.
+- **O Preview ganhou um Blob público próprio,** e o de produção ficou só em Production. As credenciais de cada ambiente, o token e o OIDC do deploy, só alcançam o Blob dele.
 - **O código não precisou mudar.** O site aceita fotos de qualquer store do Vercel Blob (`ehFotoDoSite`), então as fotos enviadas num preview aparecem no próprio preview. Um teste garante isso.
 
 ---
@@ -394,8 +394,8 @@ npm run typecheck
 | --- | --- | --- |
 | Site | Vercel, funções em São Paulo (`gru1`) | Produção em https://negociodobem.vercel.app |
 | Banco | Neon (PostgreSQL), São Paulo | Conectado ao Vercel, que cria `DATABASE_URL` e `DATABASE_URL_UNPOOLED`. |
-| Fotos de produção | Vercel Blob, público | Conectado ao Vercel só em Production. O Vercel cria `BLOB_READ_WRITE_TOKEN`, além de `BLOB_STORE_ID` e `BLOB_WEBHOOK_PUBLIC_KEY`, que o código não usa. |
-| Fotos dos previews | Outro Vercel Blob, público | Conectado só em Preview. O token dele não alcança o Blob de produção, e ele não guarda fotos reais. |
+| Fotos de produção | Vercel Blob, público, São Paulo | Conectado ao Vercel só em Production. O Vercel cria `BLOB_READ_WRITE_TOKEN`, `BLOB_STORE_ID` e `BLOB_WEBHOOK_PUBLIC_KEY`. |
+| Fotos dos previews | Outro Vercel Blob, público, São Paulo | Conectado só em Preview, com as mesmas variáveis. As credenciais dele não alcançam o Blob de produção, e ele não guarda fotos reais. |
 | Medição | Google Analytics 4 | `NEXT_PUBLIC_GA_ID` só em Production. |
 
 **Como um deploy acontece:**
@@ -416,7 +416,8 @@ npm run typecheck
 | `DATABASE_URL_UNPOOLED` | No Neon | Conexão direta, usada pelas migrações. |
 | `APP_URL` | Sim | Endereço público do site, sem barra no final. |
 | `ADMIN_EMAILS` | Sim | E-mails da moderação, separados por vírgula. |
-| `BLOB_READ_WRITE_TOKEN` | Em produção | Fotos no Vercel Blob. No Vercel, Production e Preview apontam para Blobs diferentes. |
+| `BLOB_READ_WRITE_TOKEN` | Em produção | Fotos no Vercel Blob. O site só usa o Blob quando ela existe. No Vercel, Production e Preview apontam para Blobs diferentes. |
+| `BLOB_STORE_ID` | No Vercel | Criada com a conexão do Blob. No Vercel, o `@vercel/blob` prefere se autenticar pelo OIDC do deploy com este id, em vez do token. |
 | `NEXT_PUBLIC_GA_ID` | Não | Google Analytics. Configure só em Production. |
 | `INSTAGRAM_PERFIL_OFICIAL` | Não | Liga o código por DM. |
 | `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET`, `INSTAGRAM_GRAPH_VERSION` | Não | Ligam o "Entrar com Instagram". |
