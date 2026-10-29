@@ -10,6 +10,23 @@ Um diretório de negócios com consciência social e conexão com a comunidade. 
 - **Painel do dono** para editar o perfil, responder depoimentos e ocultar o negócio.
 - **Moderação** com filas de reivindicações, indicações e denúncias, e registro de auditoria.
 
+## Telas
+
+As imagens usam os dados de exemplo do seed.
+
+![Página inicial com a busca e os filtros por causa](docs/prints/home.png)
+
+| Diretório | Perfil do negócio |
+| --- | --- |
+| ![Cards do diretório com os selos de causas](docs/prints/diretorio.png) | ![Perfil da Padaria Florescer com a história no estilo Substack](docs/prints/perfil.png) |
+| **Depoimentos** | **Painel do dono** |
+| ![Depoimentos da comunidade com a resposta do dono](docs/prints/depoimentos.png) | ![Painel do dono editando o perfil](docs/prints/painel-do-dono.png) |
+
+<p align="center">
+  <img src="docs/prints/celular-home.png" alt="Página inicial no celular" width="280">
+  <img src="docs/prints/celular-perfil.png" alt="Perfil do negócio no celular" width="280">
+</p>
+
 ## Stack
 
 Next.js 16 (App Router, Cache Components), React 19, Tailwind CSS 4, Prisma 7 + PostgreSQL, Zod e Vitest. A autenticação é por e-mail e senha (scrypt), com sessão em cookie `httpOnly`. O cookie guarda o token e o banco guarda só o hash dele.
