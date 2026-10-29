@@ -1,12 +1,16 @@
 #!/bin/sh
-# Build no Vercel. Em produção, aplica as migrações pendentes antes do build,
-# para o banco sempre ter as tabelas que o código espera.
+# Build no Vercel. Em produção e nos previews, aplica as migrações pendentes
+# antes do build, para o banco sempre ter as tabelas que o código espera.
+# O Preview tem um banco Neon só dele, separado do de produção: assim, a
+# migração de um PR ainda não aprovado nunca chega ao banco de produção.
 set -e
 
-if [ "$VERCEL_ENV" = "production" ]; then
-  # Migrações precisam de conexão direta. O Neon fornece DATABASE_URL_UNPOOLED;
-  # sem ela, usa a própria DATABASE_URL.
-  DATABASE_URL="${DATABASE_URL_UNPOOLED:-$DATABASE_URL}" npx prisma migrate deploy
-fi
+case "$VERCEL_ENV" in
+  production | preview)
+    # Migrações precisam de conexão direta. O Neon fornece DATABASE_URL_UNPOOLED;
+    # sem ela, usa a própria DATABASE_URL.
+    DATABASE_URL="${DATABASE_URL_UNPOOLED:-$DATABASE_URL}" npx prisma migrate deploy
+    ;;
+esac
 
 npx next build

@@ -214,6 +214,14 @@ Até aqui, o merge de um PR já publicava em produção. Para ter uma etapa de h
 - **Publicar é um PR da `stage` para a `main`.**
 - **Um ruleset protege `main`, `stage` e `releases/**`:** PR com 1 aprovação, a checagem "Lint, tipos e testes", só squash e histórico linear, sem force push e sem apagar a branch. Quem administra o repositório pode fazer o merge do próprio PR sem esperar aprovação, mas não pode dar push direto.
 
+### 29 de outubro: um banco só para os previews ([#18](https://github.com/fabsreis/Negocio-do-bem/issues/18))
+
+Os previews do Vercel usavam as mesmas credenciais da produção. Então o código de um PR, ainda não aprovado, lia e escrevia nos dados reais.
+
+- **O Preview ganhou um banco Neon próprio,** em São Paulo, num projeto separado do de produção. As variáveis do banco de produção ficaram só em Production.
+- **Os previews e a `stage` agora aplicam as migrações** no banco deles. Antes, um PR que mudava o banco não funcionava no preview.
+- **Por que não um branch do Neon por preview:** cada branch copiaria os dados de produção, o plano gratuito tem poucos branches, e eles dividiriam a cota de compute com a produção. A [seção 7](#7-publicação-e-infraestrutura) explica cada motivo.
+
 ---
 
 ## 4. Arquitetura
@@ -386,7 +394,8 @@ npm run typecheck
 | Peça | Onde | Observação |
 | --- | --- | --- |
 | Site | Vercel, funções em São Paulo (`gru1`) | Produção em https://negociodobem.vercel.app |
-| Banco | Neon (PostgreSQL), São Paulo | Conectado ao Vercel, que cria `DATABASE_URL` e `DATABASE_URL_UNPOOLED`. |
+| Banco de produção | Neon (PostgreSQL), São Paulo | Conectado ao Vercel só em Production. O Vercel cria `DATABASE_URL` e `DATABASE_URL_UNPOOLED`. |
+| Banco dos previews | Outro banco Neon, São Paulo | Projeto Neon separado, conectado só em Preview. Tem credenciais e cota de compute próprias e não guarda dados reais. |
 | Fotos | Vercel Blob, público | Conectado ao Vercel, que cria `BLOB_READ_WRITE_TOKEN`. |
 | Medição | Google Analytics 4 | `NEXT_PUBLIC_GA_ID` só em Production. |
 
@@ -396,14 +405,22 @@ npm run typecheck
 2. Um PR da `stage` para a `main` leva o que foi homologado para produção. O merge na `main` dispara o deploy de produção no Vercel.
    - Como só o squash é permitido, esse PR mostra também commits que já foram publicados. O merge leva para a `main` só o que ainda falta.
 3. O `scripts/vercel-build.sh` aplica as migrações pendentes (`prisma migrate deploy`) usando a conexão direta do Neon. Depois, roda o build.
-   - O build do preview, inclusive o da `stage`, não aplica migrações: só o de produção aplica.
-   - Num PR que muda o banco, as telas que dependem da mudança podem falhar no preview e na `stage` até a mudança chegar à `main`. Teste essas telas no seu computador.
+   - **Os previews nunca tocam no banco de produção.** O ambiente Preview do Vercel, que vale para os PRs e para a `stage`, só tem as credenciais do banco dos previews. Um PR, mesmo com bug, não lê nem altera os dados reais.
+   - **O build do preview também aplica as migrações**, no banco dos previews. Um PR que muda o banco já funciona no preview dele e na `stage`.
+   - **Os PRs e a `stage` dividem o mesmo banco de preview.** Ele começou vazio. Para testar, crie contas e negócios pelo próprio preview.
+   - **Um PR fechado sem merge pode deixar uma migração para trás.** Se o banco dos previews ficar diferente da `stage`, apague as tabelas dele pelo console do Neon (confira antes que é o projeto do preview) e rode um novo deploy de preview, que recria tudo.
+
+**Por que um banco separado, e não um branch do Neon por preview:**
+
+- **Um branch por preview copia os dados de produção**, com e-mails e senhas (em hash), para cada PR. Isso contraria a [privacidade por padrão](#privacidade-por-padrão).
+- **Faltam branches no plano gratuito.** O plano Free do Neon tem 10 branches por projeto, e a integração só apaga o branch de um preview quando o deploy expira (6 meses, por padrão).
+- **Um branch do mesmo projeto divide a cota de compute com a produção.** Se os previews gastarem a cota, a produção para. O branch também herda a senha do banco de produção.
 
 **Variáveis de ambiente:**
 
 | Variável | Obrigatória | Para quê |
 | --- | --- | --- |
-| `DATABASE_URL` | Sim | Conexão com o Postgres. |
+| `DATABASE_URL` | Sim | Conexão com o Postgres. No Vercel, Production e Preview apontam para bancos diferentes. |
 | `DATABASE_URL_UNPOOLED` | No Neon | Conexão direta, usada pelas migrações. |
 | `APP_URL` | Sim | Endereço público do site, sem barra no final. |
 | `ADMIN_EMAILS` | Sim | E-mails da moderação, separados por vírgula. |
