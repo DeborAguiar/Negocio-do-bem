@@ -64,7 +64,6 @@ export function lerFiltros(params: Record<string, string | string[] | undefined>
     tipos: CATEGORIAS.filter((c) => tipos.has(c)),
     causas: filtrarCausas(lista(params.causa)),
     verificados: primeiro("verificados") === "sim",
-    // Object.hasOwn, e não `in`: o `in` aceita chaves do protótipo ("constructor", "toString").
     ordem: Object.hasOwn(ORDENS, ordem) ? (ordem as Ordem) : "verificados",
     vista: primeiro("vista") === "lista" ? "lista" : "grade",
     pagina: Number.isFinite(pagina) && pagina > 0 ? Math.min(pagina, 500) : 1,

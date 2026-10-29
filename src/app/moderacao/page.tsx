@@ -47,7 +47,6 @@ export default function Moderacao(props: PageProps<"/moderacao">) {
 async function Conteudo({ searchParams }: Pick<PageProps<"/moderacao">, "searchParams">) {
   await exigirModerador();
   const params = await searchParams;
-  // Object.hasOwn, e não `in`: o `in` aceita chaves do protótipo ("constructor", "toString").
   const aba: Aba = typeof params.aba === "string" && Object.hasOwn(ABAS, params.aba) ? (params.aba as Aba) : "reivindicacoes";
   const codigo = typeof params.codigo === "string" ? extrairCodigo(params.codigo) : null;
 
