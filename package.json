@@ -2,9 +2,11 @@
   "name": "negocio-do-bem",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "vercel-build": "sh scripts/vercel-build.sh",
     "start": "next start",
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",

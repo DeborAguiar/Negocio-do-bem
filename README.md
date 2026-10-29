@@ -1,6 +1,6 @@
 # Negócio do Bem
 
-Um diretório de negócios com consciência social e conexão com a comunidade. As pessoas encontram negócios que compartilham dos seus valores, indicam quem admiram e deixam depoimentos. Os donos assumem o perfil pelo @ do Instagram e contam a própria história.
+Um diretório de negócios com consciência social e conexão com a comunidade. As pessoas encontram negócios que compartilham dos seus valores, indicam quem admiram e deixam depoimentos. Os donos assumem o perfil do negócio, a moderação confere os dados e eles contam a própria história.
 
 - **Diretório** com busca (sem diferenciar acentos) e filtros por causa e estado.
 - **Perfis** com a história do negócio no estilo Substack (Markdown, tipografia serifada), badges de causas e depoimentos.
@@ -124,7 +124,15 @@ Os testes usam um banco separado (`negocio_do_bem_teste`, ou o de `TEST_DATABASE
 
 ## Publicando
 
-Funciona em qualquer hospedagem de Next.js com um PostgreSQL gerenciado, por exemplo Vercel com Neon ou Supabase.
+Funciona em qualquer hospedagem de Next.js com um PostgreSQL gerenciado.
+
+**No Vercel**
+
+1. Em **Storage**, crie um banco **Neon** e conecte ao projeto sem prefixo, para as variáveis se chamarem `DATABASE_URL` e `DATABASE_URL_UNPOOLED`.
+2. Em **Environment Variables**, configure `ADMIN_EMAILS` e `APP_URL` (o domínio público, como `https://seu-projeto.vercel.app`). As do Instagram são opcionais.
+3. Pronto. A cada deploy de produção, o `scripts/vercel-build.sh` aplica as migrações pendentes antes do build.
+
+**Em outra hospedagem**
 
 1. Configure as variáveis de `.env.example` no painel da hospedagem. `APP_URL` precisa ser o domínio público.
 2. Aplique as migrações no banco de produção com `npm run db:deploy`. Faça isso a cada mudança no `prisma/schema.prisma`.
@@ -151,3 +159,11 @@ tests/               testes (unit/ sem banco, db/ com banco)
 - Avisar o dono por e-mail quando a reivindicação for decidida ou quando chegar um depoimento.
 - Upload de fotos do negócio.
 - Renovação automática do token do Instagram usado pelo webhook.
+
+## Como contribuir
+
+Contribuições são bem-vindas. O [CONTRIBUTING.md](CONTRIBUTING.md) explica como rodar o projeto, as regras do código e como abrir um pull request. Achou uma falha de segurança? Avise em particular, como explica o [SECURITY.md](SECURITY.md).
+
+## Licença
+
+[MIT](LICENSE): você pode usar, copiar e modificar o código, inclusive em outros projetos, desde que mantenha o aviso de licença.
