@@ -158,14 +158,15 @@ Funciona em qualquer hospedagem de Next.js com um PostgreSQL gerenciado.
 
 1. Em **Storage**, crie um banco **Neon** e conecte ao projeto sem prefixo, para as variáveis se chamarem `DATABASE_URL` e `DATABASE_URL_UNPOOLED`.
 2. Em **Environment Variables**, configure `APP_URL` (o domínio público, como `https://seu-projeto.vercel.app`). As do Instagram são opcionais.
-3. Em **Storage**, crie um **Blob** com acesso público e conecte ao projeto. Ele cria a `BLOB_READ_WRITE_TOKEN`, e é onde ficam as fotos dos perfis e das histórias.
+3. Em **Storage**, crie um **Blob** com acesso público e conecte ao projeto. É onde ficam as fotos dos perfis e das histórias. A conexão cria a `BLOB_STORE_ID`, e o site se autentica pelo OIDC do deploy, sem token.
+   - O site não precisa da `BLOB_READ_WRITE_TOKEN`. Se o painel recomendar revogar o token (na página **Projects** do Blob), faça um redeploy e revogue.
 4. Opcional: em **Environment Variables**, só para **Production**, configure `NEXT_PUBLIC_GA_ID` com o ID de medição do Google Analytics (`G-…`). Sem ela, o Analytics não carrega.
 5. A cada deploy de produção, o `scripts/vercel-build.sh` aplica as migrações pendentes antes do build.
 6. Depois do primeiro deploy, cadastre a sua conta no site e dê a moderação a ela com a conexão direta do Neon: `DATABASE_URL="postgresql://..." npm run moderacao -- dar voce@exemplo.com`.
 
 **Em outra hospedagem**
 
-1. Configure as variáveis de `.env.example` no painel da hospedagem. `APP_URL` precisa ser o domínio público.
+1. Configure as variáveis de `.env.example` no painel da hospedagem. `APP_URL` precisa ser o domínio público. Para as fotos, use a `BLOB_READ_WRITE_TOKEN` de um Vercel Blob: fora do Vercel não há OIDC.
 2. Aplique as migrações no banco de produção com `npm run db:deploy`. Faça isso a cada mudança no `prisma/schema.prisma`.
 3. O `npm install` gera o cliente do Prisma, e o `npm run build` faz o resto.
 4. Cadastre a sua conta no site e dê a moderação a ela: `DATABASE_URL="<conexão de produção>" npm run moderacao -- dar voce@exemplo.com`.
