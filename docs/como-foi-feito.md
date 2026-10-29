@@ -214,6 +214,13 @@ Até aqui, o merge de um PR já publicava em produção. Para ter uma etapa de h
 - **Publicar é um PR da `stage` para a `main`.**
 - **Um ruleset protege `main`, `stage` e `releases/**`:** PR com 1 aprovação, a checagem "Lint, tipos e testes", só squash e histórico linear, sem force push e sem apagar a branch. Quem administra o repositório pode fazer o merge do próprio PR sem esperar aprovação, mas não pode dar push direto.
 
+### 29 de outubro: um Blob só para os previews ([#27](https://github.com/fabsreis/Negocio-do-bem/issues/27))
+
+Os previews também usavam o Vercel Blob de produção, onde ficam as fotos. Então o código de um PR podia gravar e apagar as fotos reais.
+
+- **O Preview ganhou um Blob público próprio,** e o de produção ficou só em Production. O token de cada Blob só alcança os arquivos dele.
+- **O código não precisou mudar.** O site aceita fotos de qualquer store do Vercel Blob (`ehFotoDoSite`), então as fotos enviadas num preview aparecem no próprio preview. Um teste garante isso.
+
 ---
 
 ## 4. Arquitetura
@@ -387,12 +394,14 @@ npm run typecheck
 | --- | --- | --- |
 | Site | Vercel, funções em São Paulo (`gru1`) | Produção em https://negociodobem.vercel.app |
 | Banco | Neon (PostgreSQL), São Paulo | Conectado ao Vercel, que cria `DATABASE_URL` e `DATABASE_URL_UNPOOLED`. |
-| Fotos | Vercel Blob, público | Conectado ao Vercel, que cria `BLOB_READ_WRITE_TOKEN`. |
+| Fotos de produção | Vercel Blob, público | Conectado ao Vercel só em Production. O Vercel cria `BLOB_READ_WRITE_TOKEN`, além de `BLOB_STORE_ID` e `BLOB_WEBHOOK_PUBLIC_KEY`, que o código não usa. |
+| Fotos dos previews | Outro Vercel Blob, público | Conectado só em Preview. O token dele não alcança o Blob de produção, e ele não guarda fotos reais. |
 | Medição | Google Analytics 4 | `NEXT_PUBLIC_GA_ID` só em Production. |
 
 **Como um deploy acontece:**
 
 1. Cada PR para a `stage` ganha um **preview** do Vercel. O merge na `stage` atualiza o preview dela, que serve de homologação.
+   - **Os previews guardam as fotos num Blob próprio.** Uma foto enviada num preview, ou na `stage`, fica no Blob dos previews e aparece no próprio preview. O código de um PR, mesmo com bug, não grava nem apaga as fotos de produção.
 2. Um PR da `stage` para a `main` leva o que foi homologado para produção. O merge na `main` dispara o deploy de produção no Vercel.
    - Como só o squash é permitido, esse PR mostra também commits que já foram publicados. O merge leva para a `main` só o que ainda falta.
 3. O `scripts/vercel-build.sh` aplica as migrações pendentes (`prisma migrate deploy`) usando a conexão direta do Neon. Depois, roda o build.
@@ -407,7 +416,7 @@ npm run typecheck
 | `DATABASE_URL_UNPOOLED` | No Neon | Conexão direta, usada pelas migrações. |
 | `APP_URL` | Sim | Endereço público do site, sem barra no final. |
 | `ADMIN_EMAILS` | Sim | E-mails da moderação, separados por vírgula. |
-| `BLOB_READ_WRITE_TOKEN` | Em produção | Fotos no Vercel Blob. |
+| `BLOB_READ_WRITE_TOKEN` | Em produção | Fotos no Vercel Blob. No Vercel, Production e Preview apontam para Blobs diferentes. |
 | `NEXT_PUBLIC_GA_ID` | Não | Google Analytics. Configure só em Production. |
 | `INSTAGRAM_PERFIL_OFICIAL` | Não | Liga o código por DM. |
 | `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET`, `INSTAGRAM_GRAPH_VERSION` | Não | Ligam o "Entrar com Instagram". |

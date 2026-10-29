@@ -59,7 +59,7 @@ O seed cria negócios fictícios e estas contas, todas com a senha `senha-demo-1
 
 Quem estiver em `ADMIN_EMAILS` vira moderador ao entrar.
 
-As fotos enviadas no seu computador ficam em `public/enviados/` (fora do Git). Em produção elas vão para o Vercel Blob.
+As fotos enviadas no seu computador ficam em `public/enviados/` (fora do Git). No Vercel, elas vão para o Vercel Blob: um para a produção e outro para os previews.
 
 ### Problemas comuns
 
@@ -137,9 +137,10 @@ Funciona em qualquer hospedagem de Next.js com um PostgreSQL gerenciado.
 
 1. Em **Storage**, crie um banco **Neon** e conecte ao projeto sem prefixo, para as variáveis se chamarem `DATABASE_URL` e `DATABASE_URL_UNPOOLED`.
 2. Em **Environment Variables**, configure `ADMIN_EMAILS` e `APP_URL` (o domínio público, como `https://seu-projeto.vercel.app`). As do Instagram são opcionais.
-3. Em **Storage**, crie um **Blob** com acesso público e conecte ao projeto. Ele cria a `BLOB_READ_WRITE_TOKEN`, e é onde ficam as fotos dos perfis e das histórias.
-4. Opcional: em **Environment Variables**, só para **Production**, configure `NEXT_PUBLIC_GA_ID` com o ID de medição do Google Analytics (`G-…`). Sem ela, o Analytics não carrega.
-5. Pronto. A cada deploy de produção, o `scripts/vercel-build.sh` aplica as migrações pendentes antes do build.
+3. Em **Storage**, crie um **Blob** com acesso público e conecte ao projeto só no ambiente **Production**, sem mudar o prefixo, para a variável se chamar `BLOB_READ_WRITE_TOKEN`. É onde ficam as fotos dos perfis e das histórias.
+4. Crie um **segundo Blob** público, só para os previews, e conecte do mesmo jeito, só no ambiente **Preview**. Assim, o código de um PR nunca grava nem apaga as fotos de produção.
+5. Opcional: em **Environment Variables**, só para **Production**, configure `NEXT_PUBLIC_GA_ID` com o ID de medição do Google Analytics (`G-…`). Sem ela, o Analytics não carrega.
+6. Pronto. A cada deploy de produção, o `scripts/vercel-build.sh` aplica as migrações pendentes antes do build.
 
 **Em outra hospedagem**
 
