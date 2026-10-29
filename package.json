@@ -17,6 +17,7 @@
     "db:seed": "prisma db seed",
     "fotos:instagram": "tsx scripts/fotos-instagram.ts",
     "fotos:agendar": "sh scripts/agendar-fotos.sh",
+    "municipios:atualizar": "tsx scripts/municipios-ibge.ts",
     "moderacao": "tsx scripts/moderacao.ts"
   },
   "dependencies": {
