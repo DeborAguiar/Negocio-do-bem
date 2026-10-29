@@ -116,8 +116,7 @@ Validação: `src/acoes/empresas.ts` e `src/lib/formulario.ts`.
 | --- | --- | --- |
 | Nome | Sim | 2 a 80 caracteres. |
 | Categoria | Sim | Uma da lista fixa (ver [seção 12](#categorias)). |
-| Cidade | Sim | 2 a 60 caracteres. Texto livre. |
-| Estado (UF) | Sim | Uma das 27 siglas. |
+| Cidade e estado (UF) | Sim | Um município da lista do IBGE, escolhido no campo de cidade, que sugere cidades enquanto a pessoa digita. O estado vem junto com a cidade. O servidor confere na mesma lista e grava o nome oficial, com acentos (ver [seção 12](#municípios)). |
 | Resumo ("em uma frase") | Sim | 10 a 160 caracteres. Aparece nos cards do diretório. |
 | Site | Não | Até 200 caracteres. Sem `http`, ganha `https://`. Precisa ter um ponto no domínio. |
 | WhatsApp | Não | Número brasileiro com DDD (ver abaixo). |
@@ -176,7 +175,7 @@ Repare: aprovar uma reivindicação **também publica** o negócio. Por isso a a
 Código: `indicarEmpresa` em `src/acoes/empresas.ts`, tela em `src/app/indicar/`.
 
 - **Precisa de login.** Sem conta, a página `/indicar` pede para entrar ou criar uma conta.
-- **Dados pedidos:** @ do Instagram, nome, categoria, cidade, UF e resumo, que são obrigatórios. Site, WhatsApp, e-mail, causas e "por que você indica" são opcionais.
+- **Dados pedidos:** @ do Instagram, nome, categoria, cidade (o estado vem junto) e resumo, que são obrigatórios. Site, WhatsApp, e-mail, causas e "por que você indica" são opcionais.
 - **O @ não pode já estar cadastrado.** Se já existe um negócio com aquele @, em qualquer estado (inclusive pendente ou rejeitado), a indicação é recusada com um link para o perfil.
 - **Motivo da indicação:** até 600 caracteres, opcional. Aparece no perfil, com o nome de quem indicou, até o dono escrever a história.
 - **Causas:** a tela pede para marcar "só o que você sabe que é verdade". O dono ajusta depois.
@@ -533,10 +532,10 @@ Código: `scripts/fotos-instagram.ts` (roda no computador de quem cuida do proje
 - O tipo é conferido **pelos primeiros bytes do arquivo** (JPEG, PNG ou WebP), não pelo que o navegador diz.
 - O nome do arquivo é aleatório, nas pastas `perfis/` ou `historias/`.
 - Onde a foto fica:
-  - em produção, no **Vercel Blob**, com acesso público;
+  - em produção, no **Vercel Blob**, com acesso público. O site usa o Blob quando existe `BLOB_STORE_ID` (no Vercel, com o OIDC do deploy) ou `BLOB_READ_WRITE_TOKEN`;
   - nos previews do Vercel, inclusive o da `stage`, em outro Vercel Blob, só deles;
-  - no computador de quem desenvolve, sem `BLOB_READ_WRITE_TOKEN`, em `public/enviados/`, fora do Git;
-  - em produção sem o token, a pessoa vê uma mensagem de erro em vez de o site quebrar.
+  - no computador de quem desenvolve, sem nenhuma das duas, em `public/enviados/`, fora do Git;
+  - em produção sem nenhuma das duas, a pessoa vê uma mensagem de erro em vez de o site quebrar.
 
 **O site só mostra fotos guardadas por ele mesmo** (`ehFotoDoSite`): endereços de qualquer store do Vercel Blob (o de produção ou o dos previews) ou da pasta `/enviados/`. Uma imagem de outro endereço avisaria aquele servidor a cada visita ao perfil, então ela simplesmente não aparece.
 
@@ -582,12 +581,25 @@ Código: `src/acoes/depoimentos.ts`, `decidirDenuncia` em `src/acoes/moderacao.t
 
 ## 11. Diretório e busca
 
-Código: `lerFiltros` e `listarEmpresas` em `src/lib/consultas.ts`, página `src/app/page.tsx`.
+Código: filtros e "Onde?" em `src/lib/diretorio.ts`, consultas em `src/lib/consultas.ts` (`resumoDoDiretorio`, `listarCidades`, `buscarDiretorio`), páginas `src/app/page.tsx` e `src/app/explorar/page.tsx`.
 
-- **Quem aparece:** só negócios com `moderacao = "aprovada"` e `oculta = false`.
+- **Quem aparece:** só negócios com `moderacao = "aprovada"` e `oculta = false`. Os números da página inicial contam os mesmos negócios.
+
+### Página inicial
+
+- **O número de negócios cadastrados** aparece em destaque, subindo de zero até o total ao abrir a página (direto no total para quem pede menos movimento no sistema). Embaixo, quantas cidades, quantos estados e quantos negócios verificados pelo dono.
+- **A busca** tem dois campos, "O que você procura?" e "Onde?", e leva ao diretório.
+- **"Experimente:"** tem atalhos fixos para um tipo de negócio e algumas causas.
+- **Os 16 tipos de negócio** aparecem com quantos negócios cada um tem. Clicar num tipo abre o diretório com ele marcado. Tipos sem negócios ficam apagados, mas continuam clicáveis.
+- A página inicial não lista negócios nem filtros de causa: isso fica no diretório.
+
+### Diretório (`/explorar`)
+
+- **Abre** pela busca da página inicial, pelos tipos de negócio, pelos atalhos e pelo "Explorar" do menu.
 - **Ordem:**
-  - primeiro os **verificados pelo dono**;
-  - depois, dentro de cada grupo, os atualizados mais recentemente.
+  - **Verificados primeiro** (padrão): os verificados pelo dono e, dentro de cada grupo, os atualizados mais recentemente;
+  - **Mais recentes:** pela data de entrada no diretório;
+  - **Nome (A–Z)**.
   - Não existe ranking por nota nem anúncio pago.
 - **Busca por texto:**
   - procura no nome, no resumo, na categoria, na cidade, na UF e no @;
@@ -595,12 +607,21 @@ Código: `lerFiltros` e `listarEmpresas` em `src/lib/consultas.ts`, página `src
   - é feita sobre o campo `busca`, que guarda esses textos em minúsculas e sem acento e é atualizado a cada indicação e edição;
   - por isso, "sao paulo" encontra "São Paulo";
   - cada palavra digitada precisa aparecer, e só valem as 6 primeiras palavras e os 100 primeiros caracteres.
-- **Filtro por estado:** uma UF, ou "Todo o Brasil".
-- **Filtro por causas:**
-  - quem clica em várias causas vê os negócios que têm **todas** elas;
-  - a causa ativa fica destacada, e clicar de novo tira o filtro.
-- **Paginação:** 18 negócios por página, até a página 500. Os botões são "← Anteriores" e "Mais negócios →".
-- **Os filtros ficam na URL** (`?q=…&uf=…&causa=…&pagina=…`), então dá para compartilhar uma busca.
+- **"Onde?":**
+  - sugere os estados e as cidades que já têm negócios, com quantos há em cada um. Sem texto, mostra "Todo o Brasil" e as cidades com mais negócios;
+  - aceita um estado ("PE", "Pernambuco" ou "Pernambuco (estado)"), "Cidade, UF" ou só o nome da cidade, sem diferenciar acentos e maiúsculas;
+  - um nome que é de estado e de cidade (São Paulo) sem a UF vale como estado, que inclui a cidade;
+  - um nome de cidade que existe em vários estados, sem a UF, vale para todos eles;
+  - um lugar sem negócios mostra "Ainda não há negócios do bem em … no diretório".
+- **Filtros ao lado** (no celular, recolhidos em "Filtros"):
+  - **tipo de negócio:** vários de uma vez, mostrando negócios de **qualquer** um deles. Os 8 com mais negócios aparecem direto, e o resto fica em "Ver todos os 16 tipos";
+  - **causas,** separadas pelos três grupos: quem marca várias vê os negócios que têm **todas** elas;
+  - **só verificados pelo dono.**
+  - Cada opção mostra quantos negócios aparecem se ela for marcada. Nos tipos, a conta ignora os tipos já marcados. Opções com zero ficam apagadas.
+- **Filtros em uso** aparecem acima dos resultados, cada um com um "✕" para tirar.
+- **Grade ou lista:** a lista mostra um negócio por linha, com resumo, categoria e cidade.
+- **Paginação:** 18 negócios por página, até a página 500, com os números das páginas. Com mais de 7 páginas, aparecem a primeira, a última e as vizinhas da atual.
+- **Os filtros ficam na URL** (`/explorar?q=…&onde=…&tipo=…&causa=…&verificados=sim&ordem=…&vista=lista&pagina=…`), então dá para compartilhar uma busca. O tipo vai como slug (`cafe-e-padaria`). Links antigos com `?uf=PE` viram "Pernambuco (estado)".
 
 ---
 
@@ -645,6 +666,17 @@ A categoria é guardada como texto. Renomear uma categoria exige atualizar os ne
 ### Estados
 
 As 27 UFs do Brasil. Só negócios brasileiros por enquanto: a UF é obrigatória e o WhatsApp só aceita números do Brasil.
+
+### Municípios
+
+A cidade vem da lista de municípios do IBGE, gravada no projeto em `src/lib/municipios.json` (5.571 municípios). Código: `src/lib/municipios.ts`, o campo em `src/components/CampoMunicipio.tsx` e a validação em `campoMunicipio`, em `src/lib/formulario.ts`.
+
+- **O campo sugere até 8 cidades a partir de 2 letras:** primeiro as que começam com o texto, depois as que têm uma palavra começando com ele, depois o resto, em ordem alfabética. Acentos e maiúsculas não importam ("sao joao del rei" acha São João del Rei).
+- **Cidades com o mesmo nome** aparecem com a UF ao lado (Bom Jesus existe em cinco estados).
+- **O formulário envia "Cidade, UF".** O servidor também aceita "Cidade/UF", "Cidade - UF" e só o nome, quando ele não se repete em outro estado. Assim o formulário funciona antes do JavaScript carregar.
+- **Recusas:** cidade em branco ("Em que cidade fica?"), nome que existe em mais de um estado sem a UF ("Existe mais de uma cidade chamada…") e nome fora da lista ("Escolha a cidade na lista. Se ela não aparecer, confira a grafia.").
+- **Grava o nome oficial:** quem digita "niteroi" e sai do campo fica com "Niterói, RJ".
+- **A lista é atualizada à mão,** com `npm run municipios:atualizar`, quando o IBGE criar ou renomear um município.
 
 ---
 
@@ -736,6 +768,7 @@ Para uma ação nova de moderação, registre sempre na auditoria.
 | Validade dos outros pedidos | 30 dias (informativa) | `src/lib/reivindicacao.ts` |
 | Nome do negócio | 2 a 80 caracteres | `src/acoes/empresas.ts` |
 | Resumo | 10 a 160 caracteres | `src/acoes/empresas.ts` |
+| Sugestões do campo de cidade | até 8, a partir de 2 letras | `src/lib/municipios.ts` |
 | Motivo da indicação | até 600 caracteres | `src/acoes/empresas.ts` |
 | História | até 20 mil caracteres | `src/acoes/empresas.ts` |
 | Depoimento | 20 a 1.500 caracteres | `src/acoes/depoimentos.ts` |
@@ -749,6 +782,8 @@ Para uma ação nova de moderação, registre sempre na auditoria.
 | Foto vinda do Instagram | 600×600, WebP | `scripts/fotos-instagram.ts` |
 | Negócios por rodada da rotina de fotos | 100, com 1,5 s entre consultas à Meta | `scripts/fotos-instagram.ts` |
 | Negócios por página no diretório | 18 | `src/lib/consultas.ts` |
+| Tipos de negócio visíveis nos filtros | 8 (o resto em "Ver todos") | `src/app/explorar/page.tsx` |
+| Sugestões do "Onde?" | até 8 | `src/lib/diretorio.ts` |
 | Itens por fila da moderação | 50 | `src/app/moderacao/page.tsx` |
 | Registros na aba de auditoria | 100 | `src/app/moderacao/page.tsx` |
 | Leitura da história | 200 palavras por minuto | `src/lib/texto.ts` |
@@ -764,6 +799,7 @@ O sistema funciona hoje assim. Algumas destas situações podem ser intencionais
 - **Tudo entra no ar sem conferência:** indicações são publicadas na hora, e quem pede um negócio sem dono vira dono na hora. A moderação só age depois, e ninguém da moderação é avisado quando chega algo novo.
 - **Um @ tirado do ar fica bloqueado:** ninguém consegue indicar de novo, e a página de reivindicação responde 404 até a moderação publicar de novo.
 - **O @ de um negócio não muda.** Se o negócio trocar de @ no Instagram, hoje só dá para ajustar direto no banco.
+- **Cidades cadastradas antes da lista do IBGE** continuam como foram digitadas até o negócio ser editado. Se a grafia não bate com a lista, a edição pede para escolher a cidade de novo.
 - **Não dá para tirar um dono** sem transferir o perfil para outra pessoa. O selo "Verificado pelo dono" não volta atrás.
 - "Atualizada em", ao lado da história, usa a data da última mudança em **qualquer** dado do negócio (inclusive foto e visibilidade), não só no texto.
 
