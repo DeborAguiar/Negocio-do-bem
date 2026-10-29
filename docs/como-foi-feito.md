@@ -252,6 +252,16 @@ A cidade era digitada à mão, com o estado num seletor à parte. A mesma cidade
 - **A lista só é baixada quando alguém mexe no campo.** O `CampoMunicipio` carrega `src/lib/municipios.ts` com `import()`, e os cerca de 110 KB não pesam nas outras páginas.
 - **O servidor confere na mesma lista** e grava o nome oficial, com acentos. O campo funciona sem JavaScript: "Recife, PE" digitado à mão também vale.
 
+### 29 de outubro: página inicial nova e diretório com filtros ([#39](https://github.com/fabsreis/Negocio-do-bem/issues/39))
+
+A página inicial juntava apresentação, busca, filtros de causas e a lista de negócios, e achar um negócio era confuso. Três variações foram desenhadas num protótipo. A escolhida juntou a página inicial de uma com o diretório de outra.
+
+- **A página inicial ficou para começar:** o número de negócios cadastrados em destaque, a busca "O que você procura?" + "Onde?", atalhos e os tipos de negócio com seus totais.
+- **O diretório ganhou endereço próprio, `/explorar`.** Ele abre ao buscar ou ao escolher um tipo, com os filtros ao lado (tipo, causas, só verificados), grade ou lista e paginação numerada.
+- **Os filtros são links, não um formulário.** Cada opção é um link para a URL com aquele filtro trocado (`mudarFiltro`, em `src/lib/diretorio.ts`). Assim funciona sem JavaScript e toda busca pode ser compartilhada. Só a ordenação usa um `<select>` com JavaScript.
+- **Cada opção mostra quantos negócios aparecem ao marcá-la.** São poucas consultas por página: um `groupBy` por categoria ignorando os tipos marcados, e um `groupBy` das causas entre os resultados.
+- **O "Onde?" sugere só lugares com negócios** (`listarCidades`). A lista é pequena e vai pronta para o navegador. O texto escolhido ("Recife, PE") vai na URL e o servidor o interpreta, então digitar à mão também funciona.
+
 ---
 
 ## 4. Arquitetura
@@ -296,7 +306,7 @@ As linhas tracejadas são serviços opcionais. O site funciona sem eles.
 | Pasta | Conteúdo |
 | --- | --- |
 | `prisma/` | Esquema do banco (`schema.prisma`), migrações e dados de exemplo (`seed.ts`). |
-| `src/app/` | Páginas e rotas. Cada pasta é um endereço: `empresas/[usuario]` é o perfil, `painel/` é o painel do dono, `moderacao/` é a moderação, `api/` tem as rotas do Instagram. |
+| `src/app/` | Páginas e rotas. Cada pasta é um endereço: `explorar/` é o diretório, `empresas/[usuario]` é o perfil, `painel/` é o painel do dono, `moderacao/` é a moderação, `api/` tem as rotas do Instagram. |
 | `src/acoes/` | Server Actions, uma por formulário ou botão. Conferem a permissão e validam os dados. |
 | `src/lib/` | Regras de negócio e utilitários, sem interface: `reivindicacao.ts`, `consultas.ts`, `instagram.ts`, `causas.ts`, `cnpj.ts`, `formulario.ts`, `armazenamento.ts`, `auth/`… |
 | `src/components/` | Componentes de interface reutilizados entre páginas. |
