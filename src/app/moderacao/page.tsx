@@ -95,21 +95,23 @@ async function Reivindicacoes({ codigo }: { codigo: string | null }) {
 
   return (
     <div className="space-y-4">
-      <Form action="/moderacao" className="cartao flex flex-col gap-2 p-3 sm:flex-row sm:items-center">
-        <input type="hidden" name="aba" value="reivindicacoes" />
-        <label htmlFor="codigo" className="px-2 text-sm font-medium whitespace-nowrap">
-          Chegou uma DM com código?
-        </label>
-        <input id="codigo" name="codigo" defaultValue={codigo ?? ""} placeholder="BEM-XXXXXX" className="campo flex-1 font-mono uppercase" />
-        <button type="submit" className="botao">
-          Localizar
-        </button>
-        {codigo && (
-          <Link href="/moderacao?aba=reivindicacoes" className="botao-claro">
-            Ver todas
-          </Link>
-        )}
-      </Form>
+      {oficial && (
+        <Form action="/moderacao" className="cartao flex flex-col gap-2 p-3 sm:flex-row sm:items-center">
+          <input type="hidden" name="aba" value="reivindicacoes" />
+          <label htmlFor="codigo" className="px-2 text-sm font-medium whitespace-nowrap">
+            Chegou uma DM com código?
+          </label>
+          <input id="codigo" name="codigo" defaultValue={codigo ?? ""} placeholder="BEM-XXXXXX" className="campo flex-1 font-mono uppercase" />
+          <button type="submit" className="botao">
+            Localizar
+          </button>
+          {codigo && (
+            <Link href="/moderacao?aba=reivindicacoes" className="botao-claro">
+              Ver todas
+            </Link>
+          )}
+        </Form>
+      )}
 
       {pendentes.length === 0 && (
         <p className="cartao p-8 text-center text-suave">
@@ -147,7 +149,7 @@ async function Reivindicacoes({ codigo }: { codigo: string | null }) {
 
             {r.metodo === "codigo_dm" && r.codigo && (
               <div className="rounded-2xl bg-papel p-4 text-sm leading-relaxed">
-                Confira se <strong>@{oficial}</strong> recebeu uma DM <strong>de @{r.empresa.instagramUsername}</strong> com o
+                Confira se <strong>{oficial ? `@${oficial}` : "o perfil oficial"}</strong> recebeu uma DM <strong>de @{r.empresa.instagramUsername}</strong> com o
                 código <code className="rounded bg-white px-2 py-0.5 font-mono text-base font-bold text-coral-700">{r.codigo}</code>.
                 Se a DM veio de outra conta, recuse.
               </div>
@@ -167,6 +169,16 @@ async function Reivindicacoes({ codigo }: { codigo: string | null }) {
                       <Suspense fallback={<span className="block text-suave">Consultando a Receita…</span>}>
                         <DadosCnpj cnpj={r.cnpj} />
                       </Suspense>
+                    </dd>
+                  </>
+                )}
+                {r.site && (
+                  <>
+                    <dt className="text-suave">Site</dt>
+                    <dd>
+                      <a href={r.site} target="_blank" rel="noopener noreferrer" className="link break-all">
+                        {r.site}
+                      </a>
                     </dd>
                   </>
                 )}

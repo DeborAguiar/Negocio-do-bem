@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { gerarHashSenha, verificarSenha } from "@/lib/auth/senha";
 import { filtrarCausas } from "@/lib/causas";
 import { cnpjValido, formatarCnpj } from "@/lib/cnpj";
+import { campoSite } from "@/lib/formulario";
 import { iniciais, normalizarTexto } from "@/lib/texto";
 
 describe("cnpjValido", () => {
@@ -60,5 +61,18 @@ describe("filtrarCausas", () => {
       "escala-4x3",
       "pet-friendly",
     ]);
+  });
+});
+
+describe("campoSite", () => {
+  it("completa o protocolo e aceita vazio", () => {
+    expect(campoSite.parse(" meunegocio.com.br ")).toBe("https://meunegocio.com.br/");
+    expect(campoSite.parse("http://loja.example.com/contato")).toBe("http://loja.example.com/contato");
+    expect(campoSite.parse("")).toBeNull();
+  });
+
+  it("recusa o que não parece endereço", () => {
+    expect(campoSite.safeParse("minha loja").success).toBe(false);
+    expect(campoSite.safeParse("localhost").success).toBe(false);
   });
 });

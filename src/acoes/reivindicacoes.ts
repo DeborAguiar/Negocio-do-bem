@@ -5,7 +5,8 @@ import { z } from "zod";
 import { exigirUsuario } from "@/lib/auth/sessao";
 import { cnpjValido, limparCnpj } from "@/lib/cnpj";
 import { db } from "@/lib/db";
-import { errosPorCampo, texto, valoresDoFormulario, type EstadoFormulario } from "@/lib/formulario";
+import { campoSite, errosPorCampo, texto, valoresDoFormulario, type EstadoFormulario } from "@/lib/formulario";
+import { perfilOficial } from "@/lib/instagram";
 import { cancelar, ErroReivindicacao, iniciarPorCodigoDm, solicitarPorDocumento } from "@/lib/reivindicacao";
 
 async function carregar(dados: FormData) {
@@ -18,6 +19,7 @@ async function carregar(dados: FormData) {
 
 export async function gerarCodigoDm(_estado: EstadoFormulario, dados: FormData): Promise<EstadoFormulario> {
   const { empresa, usuario, caminho } = await carregar(dados);
+  if (!perfilOficial()) return { erro: "A verificação por DM está desligada. Envie os dados do negócio abaixo." };
   try {
     await iniciarPorCodigoDm(empresa.id, usuario.id);
   } catch (erro) {
@@ -39,6 +41,7 @@ const esquemaDocumento = z.object({
       }
       return limparCnpj(valor);
     }),
+  site: campoSite,
   relacao: z.string().trim().min(2, "Conte qual é a sua relação com o negócio.").max(120),
   contato: z.string().trim().min(5, "Deixe um WhatsApp ou e-mail para a moderação falar com você.").max(160),
   mensagem: z.string().trim().max(1000, "Use até 1.000 caracteres."),
@@ -48,6 +51,7 @@ export async function enviarDocumento(_estado: EstadoFormulario, dados: FormData
   const { empresa, usuario, caminho } = await carregar(dados);
   const resultado = esquemaDocumento.safeParse({
     cnpj: texto(dados, "cnpj"),
+    site: texto(dados, "site"),
     relacao: texto(dados, "relacao"),
     contato: texto(dados, "contato"),
     mensagem: texto(dados, "mensagem"),

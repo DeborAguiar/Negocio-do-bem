@@ -204,7 +204,7 @@ function ComoFunciona() {
     {
       emoji: "🔑",
       titulo: "O dono assume o perfil",
-      texto: "Quem controla o Instagram do negócio prova isso em minutos e passa a contar a própria história.",
+      texto: "Quem cuida do negócio envia CNPJ, site e Instagram, a moderação confere e o perfil passa a contar a própria história.",
     },
     {
       emoji: "🤝",

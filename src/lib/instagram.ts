@@ -35,8 +35,9 @@ export function linkPerfil(username: string): string {
   return `https://www.instagram.com/${username}/`;
 }
 
-export function perfilOficial(): string {
-  return normalizarUsername(process.env.INSTAGRAM_PERFIL_OFICIAL) ?? "negociodobem";
+/** @ que recebe as DMs com código. Sem ele, o código por DM fica desligado. */
+export function perfilOficial(): string | null {
+  return normalizarUsername(process.env.INSTAGRAM_PERFIL_OFICIAL);
 }
 
 function versaoGraph(): string {

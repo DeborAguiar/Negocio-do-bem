@@ -228,13 +228,22 @@ describe("Entrar com Instagram", () => {
 });
 
 describe("documento e moderação", () => {
-  it("cria a solicitação e não deixa duplicar enquanto está em análise", async () => {
+  it("cria a solicitação com CNPJ e site e não deixa duplicar enquanto está em análise", async () => {
     const pessoa = await criarUsuario();
     const empresa = await criarEmpresa("ateliê".normalize("NFD").replace(/[̀-ͯ]/g, ""));
-    const dados = { empresaId: empresa.id, usuarioId: pessoa.id, cnpj: "11222333000181", relacao: "Sócia", contato: "(81) 99999-0000", mensagem: null };
+    const dados = {
+      empresaId: empresa.id,
+      usuarioId: pessoa.id,
+      cnpj: "11222333000181",
+      site: "https://atelie.example.com/",
+      relacao: "Sócia",
+      contato: "(81) 99999-0000",
+      mensagem: null,
+    };
 
-    await solicitarPorDocumento(dados);
+    const pedido = await solicitarPorDocumento(dados);
 
+    expect(pedido).toMatchObject({ metodo: "documento", status: "pendente", cnpj: "11222333000181", site: "https://atelie.example.com/" });
     await expect(solicitarPorDocumento(dados)).rejects.toBeInstanceOf(ErroReivindicacao);
   });
 
@@ -242,7 +251,7 @@ describe("documento e moderação", () => {
     const pessoa = await criarUsuario();
     const moderador = await criarUsuario();
     const empresa = await criarEmpresa("loja.x");
-    const pedido = await solicitarPorDocumento({ empresaId: empresa.id, usuarioId: pessoa.id, cnpj: null, relacao: "Dono", contato: "x", mensagem: null });
+    const pedido = await solicitarPorDocumento({ empresaId: empresa.id, usuarioId: pessoa.id, cnpj: null, site: null, relacao: "Dono", contato: "x", mensagem: null });
 
     await recusar({ reivindicacaoId: pedido.id, revisorId: moderador.id, motivo: "Não conseguimos confirmar." });
 
