@@ -214,6 +214,14 @@ Até aqui, o merge de um PR já publicava em produção. Para ter uma etapa de h
 - **Publicar é um PR da `stage` para a `main`.**
 - **Um ruleset protege `main`, `stage` e `releases/**`:** PR com 1 aprovação, a checagem "Lint, tipos e testes", só squash e histórico linear, sem force push e sem apagar a branch. Quem administra o repositório pode fazer o merge do próprio PR sem esperar aprovação, mas não pode dar push direto.
 
+### 29 de outubro: banco separado para os previews ([#18](https://github.com/fabsreis/Negocio-do-bem/issues/18))
+
+Os previews do Vercel, inclusive o da `stage`, usavam o banco de produção. Testar a homologação mexia em dados reais, e um bug num PR podia apagá-los.
+
+- **Os previews ganharam um projeto Neon só deles**, conectado ao Vercel apenas no ambiente Preview. O de produção ficou só em Production.
+- **O build dos previews passou a aplicar as migrações** no banco deles. Um PR que muda o banco já funciona no preview.
+- **O seed roda no build dos previews**, para a homologação ter dados de exemplo, e só preenche um banco vazio.
+
 ---
 
 ## 4. Arquitetura
@@ -386,7 +394,8 @@ npm run typecheck
 | Peça | Onde | Observação |
 | --- | --- | --- |
 | Site | Vercel, funções em São Paulo (`gru1`) | Produção em https://negociodobem.vercel.app |
-| Banco | Neon (PostgreSQL), São Paulo | Conectado ao Vercel, que cria `DATABASE_URL` e `DATABASE_URL_UNPOOLED`. |
+| Banco de produção | Neon (PostgreSQL), São Paulo | Conectado ao Vercel só em Production. O Vercel cria `DATABASE_URL` e `DATABASE_URL_UNPOOLED`. |
+| Banco dos previews | Outro projeto Neon (`negocio-do-bem-preview`), São Paulo | Conectado só em Preview: serve à `stage` e aos PRs. Tem senha e cota de compute próprias e só guarda dados de teste. |
 | Fotos | Vercel Blob, público | Conectado ao Vercel, que cria `BLOB_READ_WRITE_TOKEN`. |
 | Medição | Google Analytics 4 | `NEXT_PUBLIC_GA_ID` só em Production. |
 
@@ -395,15 +404,28 @@ npm run typecheck
 1. Cada PR para a `stage` ganha um **preview** do Vercel. O merge na `stage` atualiza o preview dela, que serve de homologação.
 2. Um PR da `stage` para a `main` leva o que foi homologado para produção. O merge na `main` dispara o deploy de produção no Vercel.
    - Como só o squash é permitido, esse PR mostra também commits que já foram publicados. O merge leva para a `main` só o que ainda falta.
-3. O `scripts/vercel-build.sh` aplica as migrações pendentes (`prisma migrate deploy`) usando a conexão direta do Neon. Depois, roda o build.
-   - O build do preview, inclusive o da `stage`, não aplica migrações: só o de produção aplica.
-   - Num PR que muda o banco, as telas que dependem da mudança podem falhar no preview e na `stage` até a mudança chegar à `main`. Teste essas telas no seu computador.
+3. O `scripts/vercel-build.sh` aplica as migrações pendentes (`prisma migrate deploy`) no banco daquele ambiente, usando a conexão direta do Neon. Nos previews, roda também o seed. Depois, roda o build.
+
+**O banco dos previews:**
+
+- **Um preview nunca toca no banco de produção.** O ambiente Preview do Vercel só tem as credenciais do banco dos previews. Um PR, mesmo com bug, não lê nem altera os dados reais.
+- **Um PR que muda o banco já funciona no preview.** O build do preview aplica as migrações do PR no banco dos previews.
+- **A `stage` e todos os PRs dividem o mesmo banco.** A migração de um PR entra nele no primeiro deploy do PR, antes do merge. Se ela apaga ou renomeia uma coluna, a `stage` pode falhar até o PR entrar.
+- **Um PR fechado sem merge deixa a migração no banco.** O build não falha, porque o `prisma migrate deploy` ignora migrações que não estão no código, mas o banco fica diferente da `stage`. Para limpar, apague as tabelas pelo console do Neon (confira antes que é o projeto `negocio-do-bem-preview`) e faça um novo deploy da `stage`. O build recria as tabelas e o seed preenche de novo.
+- **O seed só preenche um banco vazio.** No Vercel, se o banco já tem algum usuário, ele não faz nada. Assim, um preview ligado por engano ao banco de produção não cria as contas de senha conhecida. Elas são as do [README](../README.md#rodando-localmente), e os previews exigem login no Vercel.
+
+**Por que um projeto Neon separado, e não um branch do Neon por preview:**
+
+- **Um branch copia os dados de produção**, com e-mails e senhas (em hash), para cada PR. Isso contraria a [privacidade por padrão](#privacidade-por-padrão).
+- **Os branches de um projeto dividem a cota de compute.** No plano Free, são 100 CU-horas por mês por projeto. Se os previews gastarem a cota, o compute é suspenso e a produção para. O branch também herda a senha do banco de produção.
+- **O plano Free tem 10 branches por projeto**, e a integração do Vercel só apaga o branch de um preview quando o deploy expira (6 meses, por padrão). Com a cota cheia, os builds falham.
+- **Um segundo projeto não custa nada.** O plano Free permite até 100 projetos, cada um com 0,5 GB e a própria cota de compute.
 
 **Variáveis de ambiente:**
 
 | Variável | Obrigatória | Para quê |
 | --- | --- | --- |
-| `DATABASE_URL` | Sim | Conexão com o Postgres. |
+| `DATABASE_URL` | Sim | Conexão com o Postgres. No Vercel, Production e Preview apontam para bancos diferentes. |
 | `DATABASE_URL_UNPOOLED` | No Neon | Conexão direta, usada pelas migrações. |
 | `APP_URL` | Sim | Endereço público do site, sem barra no final. |
 | `ADMIN_EMAILS` | Sim | E-mails da moderação, separados por vírgula. |
@@ -415,7 +437,7 @@ npm run typecheck
 
 O `.env.example` explica cada uma, e o [README](../README.md#publicando) tem o passo a passo de publicação.
 
-**Nunca rode o seed em produção.** Ele cria contas com senha conhecida e se recusa a rodar quando `NODE_ENV=production`.
+**Nunca rode o seed em produção.** Ele cria contas com senha conhecida e se recusa a rodar quando `NODE_ENV=production` ou, no Vercel, quando `VERCEL_ENV=production`.
 
 ---
 

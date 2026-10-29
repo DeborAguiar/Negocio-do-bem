@@ -135,11 +135,12 @@ Funciona em qualquer hospedagem de Next.js com um PostgreSQL gerenciado.
 
 **No Vercel**
 
-1. Em **Storage**, crie um banco **Neon** e conecte ao projeto sem prefixo, para as variáveis se chamarem `DATABASE_URL` e `DATABASE_URL_UNPOOLED`.
-2. Em **Environment Variables**, configure `ADMIN_EMAILS` e `APP_URL` (o domínio público, como `https://seu-projeto.vercel.app`). As do Instagram são opcionais.
-3. Em **Storage**, crie um **Blob** com acesso público e conecte ao projeto. Ele cria a `BLOB_READ_WRITE_TOKEN`, e é onde ficam as fotos dos perfis e das histórias.
-4. Opcional: em **Environment Variables**, só para **Production**, configure `NEXT_PUBLIC_GA_ID` com o ID de medição do Google Analytics (`G-…`). Sem ela, o Analytics não carrega.
-5. Pronto. A cada deploy de produção, o `scripts/vercel-build.sh` aplica as migrações pendentes antes do build.
+1. Em **Storage**, crie um banco **Neon** e conecte ao projeto sem prefixo, só no ambiente **Production**, para as variáveis se chamarem `DATABASE_URL` e `DATABASE_URL_UNPOOLED`.
+2. Crie um **segundo banco Neon**, só para os previews, e conecte do mesmo jeito, só no ambiente **Preview**. Assim, o código de um PR nunca lê nem altera os dados de produção.
+3. Em **Environment Variables**, configure `ADMIN_EMAILS` e `APP_URL` (o domínio público, como `https://seu-projeto.vercel.app`). As do Instagram são opcionais.
+4. Em **Storage**, crie um **Blob** com acesso público e conecte ao projeto. Ele cria a `BLOB_READ_WRITE_TOKEN`, e é onde ficam as fotos dos perfis e das histórias.
+5. Opcional: em **Environment Variables**, só para **Production**, configure `NEXT_PUBLIC_GA_ID` com o ID de medição do Google Analytics (`G-…`). Sem ela, o Analytics não carrega.
+6. Pronto. A cada deploy, de produção ou de preview, o `scripts/vercel-build.sh` aplica as migrações pendentes no banco daquele ambiente antes do build. Nos previews, ele também roda o seed, que só preenche um banco vazio.
 
 **Em outra hospedagem**
 
@@ -147,7 +148,7 @@ Funciona em qualquer hospedagem de Next.js com um PostgreSQL gerenciado.
 2. Aplique as migrações no banco de produção com `npm run db:deploy`. Faça isso a cada mudança no `prisma/schema.prisma`.
 3. O `npm install` gera o cliente do Prisma, e o `npm run build` faz o resto.
 
-Nunca rode o seed em produção: ele cria contas com senha conhecida e se recusa a rodar quando `NODE_ENV=production`.
+Nunca rode o seed em produção: ele cria contas com senha conhecida e se recusa a rodar quando `NODE_ENV=production` ou, no Vercel, quando `VERCEL_ENV=production`.
 
 ## Estrutura
 
