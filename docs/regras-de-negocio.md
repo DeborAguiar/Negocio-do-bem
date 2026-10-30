@@ -389,7 +389,7 @@ O que a moderação confere: se o CNPJ, o site e o contato batem com o @ do Inst
 6. Cancela os **outros pedidos pendentes da mesma pessoa** para o mesmo negócio. Pedidos de **outras pessoas** para o mesmo negócio continuam pendentes, e a moderação decide cada um.
 7. Registra na auditoria `reivindicacao.aprovada` ou `reivindicacao.aprovada_com_transferencia`.
 
-**Duas pessoas da moderação ao mesmo tempo:** só a primeira decisão vale, mesmo quando as duas chegam juntas. A decisão começa marcando o pedido como decidido, com a condição de ele ainda estar `pendente`, e o banco segura o pedido até o fim da transação. A segunda decisão é recusada com o aviso "Esta solicitação já tinha sido decidida por outra pessoa da moderação", e nada dela é aplicado nem registrado na auditoria.
+**Duas pessoas da moderação ao mesmo tempo:** só a primeira decisão vale, mesmo quando as duas chegam juntas. A decisão começa marcando o pedido como decidido, com a condição de ele ainda estar `pendente`, e o banco segura o pedido até o fim da transação. A aprovação antes disso trava o negócio, para que toda aprovação do mesmo negócio siga a mesma ordem e duas aprovações simultâneas de pedidos da mesma pessoa nunca se travem uma na outra. A segunda decisão é recusada com o aviso "Esta solicitação já tinha sido decidida por outra pessoa da moderação", e nada dela é aplicado nem registrado na auditoria.
 
 **Depois da decisão,** a pessoa acompanha em `/painel`, em "Minhas solicitações de reivindicação". Aparecem as 20 mais recentes, menos as canceladas, com o status e, se recusada, o motivo.
 

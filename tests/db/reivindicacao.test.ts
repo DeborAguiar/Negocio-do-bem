@@ -1,5 +1,7 @@
+import { Client } from "pg";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
+import { URL_BANCO_TESTE } from "../banco-de-teste";
 import {
   aprovar,
   aprovarPendentesSemDono,
@@ -386,6 +388,72 @@ describe("documento e moderação", () => {
       expect(auditoria).toHaveLength(1);
       const esperado = auditoria[0]!.acao === "reivindicacao.aprovada" ? [pessoa.id, dono.id].sort() : [pessoa.id];
       expect(await donos(empresa.id)).toEqual(esperado);
+    });
+
+    it("aprovar dois pedidos da mesma pessoa para o mesmo negócio: sem deadlock, só um vale", async () => {
+      const pessoa = await criarUsuario("Pessoa");
+      const dono = await criarUsuario("Dono");
+      const empresa = await criarEmpresa("loja.dois.pedidos");
+      await db.empresaMembro.create({ data: { empresaId: empresa.id, usuarioId: dono.id } });
+      const porDocumento = await solicitarPorDocumento({ empresaId: empresa.id, usuarioId: pessoa.id, cnpj: null, site: null, relacao: "Dono", contato: "x", mensagem: null });
+      const porDm = await iniciarPorCodigoDm(empresa.id, pessoa.id);
+      const moderadoras = [await criarUsuario("Moderação 1"), await criarUsuario("Moderação 2")];
+
+      // Aquece o pool para saber quais conexões do Postgres são as deste teste.
+      const aquecimento = await Promise.all(
+        Array.from({ length: 6 }, () =>
+          db.$queryRaw<{ pid: number }[]>`SELECT pg_backend_pid() AS pid FROM pg_sleep(0.2)`.then(([linha]) => linha!.pid),
+        ),
+      );
+      const pidsDoTeste = [...new Set(aquecimento)];
+      expect(pidsDoTeste.length).toBeGreaterThanOrEqual(2);
+
+      // Outra conexão segura o negócio travado até as duas aprovações estarem no ar.
+      // Assim elas se sobrepõem sempre, sem depender de tempo.
+      const segurador = new Client({ connectionString: URL_BANCO_TESTE });
+      await segurador.connect();
+      let resultados: PromiseSettledResult<void>[];
+      try {
+        await segurador.query("BEGIN");
+        await segurador.query(`SELECT id FROM "Empresa" WHERE id = $1 FOR UPDATE`, [empresa.id]);
+
+        const aprovacoes = Promise.allSettled([
+          aprovar({ reivindicacaoId: porDocumento.id, revisorId: moderadoras[0]!.id }),
+          aprovar({ reivindicacaoId: porDm.id, revisorId: moderadoras[1]!.id }),
+        ]);
+
+        // Espera as duas transações pararem numa trava. Com o negócio travado primeiro,
+        // as duas esperam o segurador. Sem isso, uma espera o segurador e a outra espera a primeira.
+        const deadline = Date.now() + 10_000;
+        for (;;) {
+          const { rows } = await segurador.query<{ esperando: number }>(
+            `SELECT count(*)::int AS esperando FROM pg_stat_activity
+             WHERE datname = current_database() AND pid = ANY($1::int[]) AND wait_event_type = 'Lock'`,
+            [pidsDoTeste],
+          );
+          if (rows[0]!.esperando >= 2) break;
+          if (Date.now() > deadline) throw new Error("As duas aprovações não chegaram à trava a tempo.");
+          await new Promise((r) => setTimeout(r, 20));
+        }
+        await segurador.query("COMMIT");
+        resultados = await aprovacoes;
+      } finally {
+        await segurador.query("ROLLBACK").catch(() => undefined);
+        await segurador.end();
+      }
+
+      // O deadlock (40P01) chega do Prisma como P2034; o usuário veria um erro 500.
+      for (const r of resultados) {
+        if (r.status !== "rejected") continue;
+        const { code, meta } = r.reason as { code?: string; meta?: unknown };
+        expect(`${code} ${JSON.stringify(meta)}`).not.toMatch(/P2034|40P01|deadlock/i);
+      }
+      expect(vencedoras(resultados)).toBe(1);
+
+      const pedidos = await db.reivindicacao.findMany({ where: { empresaId: empresa.id }, orderBy: { id: "asc" } });
+      expect(pedidos.map((p) => p.status).sort()).toEqual(["aprovada", "cancelada"]);
+      expect(await donos(empresa.id)).toEqual([pessoa.id, dono.id].sort());
+      expect(await db.registroAuditoria.count({ where: { alvoId: empresa.id } })).toBe(1);
     });
 
     it("recusar duas vezes: só a primeira recusa vale", async () => {
