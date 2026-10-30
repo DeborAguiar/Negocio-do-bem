@@ -46,8 +46,11 @@ describe("limite por IP", () => {
     expect(await db.tentativaAcesso.findFirst()).toMatchObject({ contagem: LIMITE_POR_IP + 5 });
   });
 
-  it("sem IP conhecido não limita", async () => {
-    for (let i = 0; i <= LIMITE_POR_IP; i++) expect(await tentativaDoIpLiberada(null)).toBe(true);
+  it("sem IP conhecido, todos dividem um contador só", async () => {
+    for (let i = 0; i < LIMITE_POR_IP; i++) expect(await tentativaDoIpLiberada(null)).toBe(true);
+    expect(await tentativaDoIpLiberada(null)).toBe(false);
+    expect(await tentativaDoIpLiberada("200.0.0.1")).toBe(true);
+    expect(await db.tentativaAcesso.count()).toBe(2);
   });
 
   it("guarda o hash do IP, e não o IP", async () => {

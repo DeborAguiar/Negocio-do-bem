@@ -1,5 +1,6 @@
 import "server-only";
 import { createHash } from "node:crypto";
+import { isIP } from "node:net";
 import { db } from "@/lib/db";
 
 // Cada login e cadastro calcula o scrypt (~32 MB de memória), então o limite é
@@ -9,7 +10,7 @@ export const LIMITE_POR_IP = 10;
 export const LIMITE_POR_EMAIL = 5;
 export const JANELA_MS = 15 * 60 * 1000;
 
-function chave(tipo: "ip" | "email", valor: string): string {
+function chave(tipo: "ip" | "ip-desconhecido" | "email", valor: string): string {
   return createHash("sha256").update(`${tipo}:${valor}`).digest("hex");
 }
 
@@ -37,13 +38,29 @@ async function contar(chaveTentativa: string): Promise<number> {
 }
 
 /**
+ * IP de quem fez a requisição, ou null quando não há como saber com segurança.
+ * Cabeçalho que o visitante pode escrever não vale: se valesse, cada tentativa
+ * traria um IP novo e o limite nunca agiria.
+ * - No Vercel (VERCEL=1), só o x-vercel-forwarded-for, que o próprio Vercel escreve.
+ * - Em outra hospedagem, nenhum cabeçalho, a menos que quem cuida do site declare
+ *   com AUTENTICACAO_PROXY_CONFIAVEL=1 que há um proxy na frente que escreve o
+ *   x-forwarded-for. Vale o último valor da lista, que é o que o proxy acrescentou.
+ */
+export function ipDoCabecalho(cabecalhos: Headers): string | null {
+  const nome =
+    process.env.VERCEL === "1" ? "x-vercel-forwarded-for" : process.env.AUTENTICACAO_PROXY_CONFIAVEL === "1" ? "x-forwarded-for" : null;
+  const ip = nome ? cabecalhos.get(nome)?.split(",").at(-1)?.trim() : undefined;
+  return ip && !ip.includes("%") && isIP(ip) ? ip : null;
+}
+
+/**
  * Conta uma tentativa de login ou de cadastro vinda deste IP e diz se ela pode seguir.
- * Sem IP conhecido (fora do Vercel), não há limite por IP.
+ * Sem IP conhecido, todas as tentativas dividem um contador só: o cadastro não tem
+ * limite por e-mail, e sem este contador o scrypt ficaria sem freio.
  */
 export async function tentativaDoIpLiberada(ip: string | null): Promise<boolean> {
   await db.tentativaAcesso.deleteMany({ where: { janelaIniciadaEm: { lt: inicioDaJanela() } } });
-  if (!ip) return true;
-  return (await contar(chave("ip", ip))) <= LIMITE_POR_IP;
+  return (await contar(ip ? chave("ip", ip) : chave("ip-desconhecido", ""))) <= LIMITE_POR_IP;
 }
 
 /** Se este e-mail ainda pode tentar entrar: menos de 5 senhas erradas na janela. */

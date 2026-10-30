@@ -1,0 +1,150 @@
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { cadastrar, entrar } from "@/acoes/conta";
+import * as senha from "@/lib/auth/senha";
+import { LIMITE_POR_IP } from "@/lib/auth/tentativas";
+import { db } from "@/lib/db";
+
+// Estes testes passam pelas ações de verdade (entrar e cadastrar). Só o que
+// precisa de uma requisição do Next fica de mentira: os cabeçalhos, o redirect
+// e o cookie da sessão. O scrypt é o de verdade, com espiões para contar quantas
+// vezes ele roda: o limite existe para impedir justamente essas conferências.
+const contexto = vi.hoisted(() => ({
+  cabecalhos: {} as Record<string, string>,
+  // Cabeçalhos das próximas chamadas, na ordem em que elas pedem os cabeçalhos.
+  proximos: [] as Record<string, string>[],
+}));
+const criarSessao = vi.hoisted(() => vi.fn());
+
+vi.mock("next/headers", () => ({ headers: async () => new Headers(contexto.proximos.shift() ?? contexto.cabecalhos) }));
+vi.mock("next/navigation", () => ({
+  redirect: () => {
+    throw new Error("redirecionado");
+  },
+}));
+vi.mock("@/lib/auth/sessao", () => ({ caminhoSeguro: () => "/", criarSessao, encerrarSessao: vi.fn() }));
+vi.mock("@/lib/auth/senha", async (importarOriginal) => {
+  const original = await importarOriginal<typeof import("@/lib/auth/senha")>();
+  return {
+    ...original,
+    gerarHashSenha: vi.fn(original.gerarHashSenha),
+    verificarSenha: vi.fn(original.verificarSenha),
+  };
+});
+
+const SENHA_CERTA = "senha-certa-123";
+const SENHA_ERRADA = "senha-errada-123";
+const MENSAGEM_RECUSA = "E-mail ou senha incorretos.";
+const MENSAGEM_LIMITE_CADASTRO = "Muitas tentativas seguidas. Espere alguns minutos e tente de novo.";
+
+function formulario(email: string, senhaDigitada = SENHA_ERRADA) {
+  const dados = new FormData();
+  dados.set("nome", "Pessoa de teste");
+  dados.set("email", email);
+  dados.set("senha", senhaDigitada);
+  return dados;
+}
+
+/** Tenta entrar `vezes` vezes, cada uma com um e-mail novo, para só o limite por IP agir. */
+async function entrarVezes(vezes: number, cabecalhosDaVez: (indice: number) => Record<string, string>) {
+  const respostas = [];
+  for (let indice = 0; indice < vezes; indice++) {
+    contexto.cabecalhos = cabecalhosDaVez(indice);
+    respostas.push(await entrar({}, formulario(`pessoa-${indice}@exemplo.com`)));
+  }
+  return respostas;
+}
+
+/** Tenta cadastrar `vezes` vezes, cada uma com um e-mail novo. Devolve as respostas que não foram redirect. */
+async function cadastrarVezes(vezes: number, cabecalhosDaVez: (indice: number) => Record<string, string>) {
+  const respostas = [];
+  for (let indice = 0; indice < vezes; indice++) {
+    contexto.cabecalhos = cabecalhosDaVez(indice);
+    try {
+      respostas.push(await cadastrar({}, formulario(`nova-${indice}@exemplo.com`, SENHA_CERTA)));
+    } catch (erro) {
+      if (!(erro instanceof Error) || erro.message !== "redirecionado") throw erro;
+    }
+  }
+  return respostas;
+}
+
+beforeEach(async () => {
+  contexto.cabecalhos = {};
+  contexto.proximos = [];
+  vi.stubEnv("VERCEL", "1");
+  vi.stubEnv("AUTENTICACAO_PROXY_CONFIAVEL", undefined);
+  await db.$executeRawUnsafe(`TRUNCATE "TentativaAcesso", "Usuario" CASCADE`);
+  vi.clearAllMocks();
+});
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+afterAll(async () => {
+  await db.$executeRawUnsafe(`TRUNCATE "TentativaAcesso", "Usuario" CASCADE`);
+  await db.$disconnect();
+});
+
+describe("de onde vem o IP", () => {
+  it("no Vercel, usa só o x-vercel-forwarded-for e ignora o x-real-ip e o x-forwarded-for que o visitante inventa", async () => {
+    const respostas = await entrarVezes(LIMITE_POR_IP + 2, (i) => ({
+      "x-vercel-forwarded-for": "203.0.113.7",
+      "x-real-ip": `198.51.100.${i + 1}`,
+      "x-forwarded-for": `192.0.2.${i + 1}, 203.0.113.7`,
+    }));
+    expect(senha.verificarSenha).toHaveBeenCalledTimes(LIMITE_POR_IP);
+    expect(respostas.map((r) => r?.erro)).toEqual(Array(LIMITE_POR_IP + 2).fill(MENSAGEM_RECUSA));
+  });
+
+  it("no Vercel, sem x-vercel-forwarded-for, o IP é desconhecido: o x-forwarded-for e o x-real-ip não valem", async () => {
+    await entrarVezes(LIMITE_POR_IP + 2, (i) => ({ "x-real-ip": `198.51.100.${i + 1}`, "x-forwarded-for": `192.0.2.${i + 1}` }));
+    expect(senha.verificarSenha).toHaveBeenCalledTimes(LIMITE_POR_IP);
+  });
+
+  it("fora do Vercel e sem proxy declarado, nenhum cabeçalho vale", async () => {
+    vi.stubEnv("VERCEL", undefined);
+    await entrarVezes(LIMITE_POR_IP + 2, (i) => ({
+      "x-vercel-forwarded-for": `203.0.113.${i + 1}`,
+      "x-real-ip": `198.51.100.${i + 1}`,
+      "x-forwarded-for": `192.0.2.${i + 1}`,
+    }));
+    expect(senha.verificarSenha).toHaveBeenCalledTimes(LIMITE_POR_IP);
+  });
+
+  it("com o proxy declarado, usa o último valor do x-forwarded-for, que é o que o proxy pôs", async () => {
+    vi.stubEnv("VERCEL", undefined);
+    vi.stubEnv("AUTENTICACAO_PROXY_CONFIAVEL", "1");
+    await entrarVezes(LIMITE_POR_IP + 2, (i) => ({
+      "x-forwarded-for": `192.0.2.${i + 1}, 198.51.100.${i + 1}, 203.0.113.7`,
+      "x-real-ip": `198.51.100.${i + 1}`,
+    }));
+    expect(senha.verificarSenha).toHaveBeenCalledTimes(LIMITE_POR_IP);
+    // Outro IP posto pelo proxy tem a cota própria.
+    contexto.cabecalhos = { "x-forwarded-for": "203.0.113.8" };
+    await entrar({}, formulario("outra-pessoa@exemplo.com"));
+    expect(senha.verificarSenha).toHaveBeenCalledTimes(LIMITE_POR_IP + 1);
+  });
+
+  it("com o proxy declarado, um valor que não é IP vai para o contador do IP desconhecido", async () => {
+    vi.stubEnv("VERCEL", undefined);
+    vi.stubEnv("AUTENTICACAO_PROXY_CONFIAVEL", "1");
+    await entrarVezes(LIMITE_POR_IP + 2, (i) => ({ "x-forwarded-for": i % 2 ? `nao-e-ip-${i}` : "" }));
+    expect(senha.verificarSenha).toHaveBeenCalledTimes(LIMITE_POR_IP);
+  });
+});
+
+describe("IP desconhecido", () => {
+  it("o cadastro não confere o scrypt sem limite: todos os cadastros sem IP dividem um contador só", async () => {
+    const respostas = await cadastrarVezes(LIMITE_POR_IP + 2, () => ({}));
+    expect(senha.gerarHashSenha).toHaveBeenCalledTimes(LIMITE_POR_IP);
+    expect(respostas.map((r) => r?.erro)).toEqual(Array(2).fill(MENSAGEM_LIMITE_CADASTRO));
+    expect(await db.usuario.count()).toBe(LIMITE_POR_IP);
+  });
+
+  it("login e cadastro sem IP dividem o mesmo contador", async () => {
+    await cadastrarVezes(LIMITE_POR_IP - 2, () => ({}));
+    await entrarVezes(4, () => ({}));
+    expect(senha.gerarHashSenha).toHaveBeenCalledTimes(LIMITE_POR_IP - 2);
+    expect(senha.verificarSenha).toHaveBeenCalledTimes(2);
+    expect(await db.tentativaAcesso.count()).toBe(1 + 2);
+  });
+});

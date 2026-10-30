@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { gerarHashSenha, verificarSenha } from "@/lib/auth/senha";
 import { caminhoSeguro, criarSessao, encerrarSessao } from "@/lib/auth/sessao";
-import { emailLiberado, registrarFalhaDoEmail, tentativaDoIpLiberada, zerarTentativasDoEmail } from "@/lib/auth/tentativas";
+import { emailLiberado, ipDoCabecalho, registrarFalhaDoEmail, tentativaDoIpLiberada, zerarTentativasDoEmail } from "@/lib/auth/tentativas";
 import { db } from "@/lib/db";
 import { errosPorCampo, texto, valoresDoFormulario, type EstadoFormulario } from "@/lib/formulario";
 
@@ -15,11 +15,9 @@ const esquemaCadastro = z.object({
   senha: z.string().min(8, "Use pelo menos 8 caracteres.").max(200, "Senha muito longa."),
 });
 
-/** IP de quem fez a requisição. No Vercel, os dois cabeçalhos são preenchidos pelo próprio Vercel. */
+/** IP de quem fez a requisição, ou null se não der para confiar em nenhum cabeçalho (veja `ipDoCabecalho`). */
 async function ipDaRequisicao(): Promise<string | null> {
-  const cabecalhos = await headers();
-  const ip = cabecalhos.get("x-real-ip") ?? cabecalhos.get("x-forwarded-for")?.split(",")[0];
-  return ip?.trim() || null;
+  return ipDoCabecalho(await headers());
 }
 
 export async function cadastrar(_estado: EstadoFormulario, dados: FormData): Promise<EstadoFormulario> {
