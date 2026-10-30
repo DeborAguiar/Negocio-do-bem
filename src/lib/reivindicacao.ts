@@ -355,6 +355,12 @@ export type ModoAprovacao = "adicionar" | "transferir";
  * Aprova a reivindicação: a pessoa vira dona e o negócio fica verificado.
  * `revisorId` null significa aprovação automática.
  * `transferir` remove os donos anteriores (usado em disputas).
+ *
+ * A primeira instrução trava o negócio com FOR UPDATE: toda aprovação segue a ordem negócio,
+ * depois pedidos, a mesma de quem cria pedidos. Sem isso, duas aprovações de pedidos da mesma
+ * pessoa podem esperar uma pela outra (deadlock). O nível é FOR UPDATE porque a aprovação pode
+ * trocar o ID do Instagram, que é chave única: essa escrita conflita com o FOR KEY SHARE de
+ * `bloquearEmpresa`, então a trava já nasce no mesmo nível.
  */
 export async function aprovar(params: {
   reivindicacaoId: string;
@@ -366,10 +372,6 @@ export async function aprovar(params: {
   const { reivindicacaoId, revisorId, modo = "adicionar" } = params;
 
   await db.$transaction(async (tx) => {
-    // Primeira instrução: trava o negócio do pedido. Toda aprovação do mesmo negócio
-    // segue a mesma ordem de travas (negócio, depois pedidos). Sem isso, duas aprovações
-    // de pedidos da mesma pessoa podem travar uma na outra: uma espera o vínculo de dono
-    // que a outra criou e a outra espera o pedido irmão que a primeira marcou (deadlock).
     const travados = await tx.$queryRaw<{ id: string }[]>`
       SELECT e.id FROM "Empresa" e
       WHERE e.id = (SELECT r."empresaId" FROM "Reivindicacao" r WHERE r.id = ${reivindicacaoId})

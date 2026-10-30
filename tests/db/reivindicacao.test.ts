@@ -269,7 +269,7 @@ describe("renovação durante aprovação com troca do ID do Instagram", () => {
     // As operações SQL são reais. As pausas fixam a ordem sem depender de atrasos.
     const cliente = db.$extends({ query: {
       reivindicacao: {
-        async findUnique({ args, query }) {
+        async findUniqueOrThrow({ args, query }) {
           const pedido = await query(args);
           pedidoLido.liberar();
           await continuarAprovacao.promessa;
