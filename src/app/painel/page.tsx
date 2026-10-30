@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
+import { ConfirmarEmail } from "@/components/ConfirmarEmail";
 import { Monograma } from "@/components/Monograma";
 import { SeloStatus } from "@/components/SeloStatus";
 import { exigirUsuario } from "@/lib/auth/sessao";
@@ -60,6 +61,10 @@ async function Conteudo() {
     <div className="mt-2 space-y-12">
       <p className="text-suave">Olá, {usuario.nome.split(" ")[0]}! Aqui você cuida dos seus negócios e acompanha suas indicações.</p>
 
+      {!usuario.emailConfirmado && (
+        <ConfirmarEmail email={usuario.email} para="indicar, deixar depoimentos e assumir negócios" voltar="/painel" />
+      )}
+
       <section>
         <h2 className="font-serif text-2xl font-semibold">Meus negócios</h2>
         {empresas.length === 0 ? (
@@ -75,7 +80,7 @@ async function Conteudo() {
             e clique em &ldquo;Sou o dono&rdquo;.
           </div>
         ) : (
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
             {empresas.map(({ empresa }) => (
               <div key={empresa.id} className="cartao flex flex-col p-5">
                 <div className="flex items-center gap-3">

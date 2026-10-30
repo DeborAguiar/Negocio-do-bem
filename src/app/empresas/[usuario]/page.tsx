@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import { denunciarDepoimento } from "@/acoes/depoimentos";
 import { AvisoDaUrl } from "@/components/Avisos";
 import { CausaBadge } from "@/components/CausaBadge";
+import { ConfirmarEmail } from "@/components/ConfirmarEmail";
 import { Historia } from "@/components/Historia";
 import { JsonLd } from "@/components/JsonLd";
 import { FotoEmpresa } from "@/components/FotoEmpresa";
@@ -182,7 +183,8 @@ function Contatos({ empresa }: { empresa: Perfil }) {
         </a>
       )}
       {empresa.emailContato && (
-        <a href={`mailto:${empresa.emailContato}`} className="botao-claro botao-pequeno">
+        // break-all: um e-mail comprido quebra em vez de passar da largura do celular.
+        <a href={`mailto:${empresa.emailContato}`} className="botao-claro botao-pequeno max-w-full break-all">
           {empresa.emailContato}
         </a>
       )}
@@ -253,8 +255,14 @@ function Depoimentos({
 
       {publico && !dono && !jaEscreveu && (
         <div className="mt-8">
-          {usuario ? (
+          {usuario?.emailConfirmado ? (
             <FormDepoimento empresaId={empresa.id} nomeEmpresa={empresa.nome} />
+          ) : usuario ? (
+            <ConfirmarEmail
+              email={usuario.email}
+              para="deixar seu depoimento"
+              voltar={`/empresas/${empresa.instagramUsername}#depoimentos`}
+            />
           ) : (
             <p className="cartao p-5 text-sm text-suave">
               <Link href={`/entrar?voltar=${encodeURIComponent(`/empresas/${empresa.instagramUsername}#depoimentos`)}`} className="link">
@@ -286,7 +294,7 @@ function Depoimentos({
                   </summary>
                   <form action={denunciarDepoimento} className="mt-2 flex gap-2">
                     <input type="hidden" name="depoimentoId" value={depoimento.id} />
-                    <input name="motivo" placeholder="O que há de errado?" className="campo py-1.5 text-xs" maxLength={300} />
+                    <input name="motivo" placeholder="O que há de errado?" className="campo py-1.5 sm:text-xs" maxLength={300} />
                     <button type="submit" className="botao-claro botao-pequeno">
                       Enviar
                     </button>
