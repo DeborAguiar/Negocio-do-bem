@@ -68,6 +68,12 @@ async function cadastrarVezes(vezes: number, cabecalhosDaVez: (indice: number) =
   return respostas;
 }
 
+async function criarUsuario(email: string) {
+  const usuario = await db.usuario.create({ data: { nome: "Pessoa de teste", email, senhaHash: await senha.gerarHashSenha(SENHA_CERTA) } });
+  vi.clearAllMocks();
+  return usuario;
+}
+
 beforeEach(async () => {
   contexto.cabecalhos = {};
   contexto.proximos = [];
@@ -133,12 +139,6 @@ describe("de onde vem o IP", () => {
 });
 
 describe("limite por e-mail", () => {
-  async function criarUsuario(email: string) {
-    const usuario = await db.usuario.create({ data: { nome: "Pessoa de teste", email, senhaHash: await senha.gerarHashSenha(SENHA_CERTA) } });
-    vi.clearAllMocks();
-    return usuario;
-  }
-
   it("só 5 tentativas chegam ao scrypt, mesmo vindas de IPs diferentes", async () => {
     await criarUsuario("ana@exemplo.com");
     const respostas = [];
@@ -159,6 +159,107 @@ describe("limite por e-mail", () => {
     expect(senha.verificarSenha).toHaveBeenCalledTimes(LIMITE_POR_EMAIL);
     expect(respostas.map((r) => r?.erro)).toEqual(Array(total).fill(MENSAGEM_RECUSA));
     expect(await db.tentativaAcesso.count({ where: { contagem: total } })).toBe(1);
+  });
+});
+
+describe("o limite vale nas duas ações e vem antes do scrypt", () => {
+  const vercel = { "x-vercel-forwarded-for": "203.0.113.7" };
+
+  it("o cadastro para no limite por IP sem gerar o hash e sem criar conta", async () => {
+    const respostas = await cadastrarVezes(LIMITE_POR_IP + 2, () => vercel);
+    expect(senha.gerarHashSenha).toHaveBeenCalledTimes(LIMITE_POR_IP);
+    expect(respostas.map((r) => r?.erro)).toEqual(Array(2).fill(MENSAGEM_LIMITE_CADASTRO));
+    expect(await db.usuario.count()).toBe(LIMITE_POR_IP);
+  });
+
+  it("cadastro e login dividem a cota do mesmo IP", async () => {
+    await cadastrarVezes(6, () => vercel);
+    await entrarVezes(6, () => vercel);
+    expect(senha.gerarHashSenha).toHaveBeenCalledTimes(6);
+    expect(senha.verificarSenha).toHaveBeenCalledTimes(LIMITE_POR_IP - 6);
+  });
+
+  it("cadastros ao mesmo tempo, do mesmo IP, também geram só 10 hashes", async () => {
+    contexto.cabecalhos = vercel;
+    const respostas = await Promise.all(
+      Array.from({ length: LIMITE_POR_IP + 5 }, (_, i) => cadastrar({}, formulario(`junto-${i}@exemplo.com`, SENHA_CERTA)).catch((erro: Error) => erro)),
+    );
+    expect(senha.gerarHashSenha).toHaveBeenCalledTimes(LIMITE_POR_IP);
+    expect(respostas.filter((r) => r instanceof Error)).toHaveLength(LIMITE_POR_IP);
+    expect(await db.usuario.count()).toBe(LIMITE_POR_IP);
+  });
+
+  it("depois do limite, nem a senha certa entra: a conferência nem acontece", async () => {
+    await criarUsuario("ana@exemplo.com");
+    contexto.cabecalhos = vercel;
+    for (let i = 0; i < LIMITE_POR_IP; i++) await entrar({}, formulario(`outra-${i}@exemplo.com`));
+    vi.clearAllMocks();
+    const resposta = await entrar({}, formulario("ana@exemplo.com", SENHA_CERTA));
+    expect(resposta?.erro).toBe(MENSAGEM_RECUSA);
+    expect(senha.verificarSenha).not.toHaveBeenCalled();
+    expect(criarSessao).not.toHaveBeenCalled();
+  });
+
+  it("depois do limite por e-mail, nem a senha certa entra: a conferência nem acontece", async () => {
+    await criarUsuario("ana@exemplo.com");
+    for (let i = 0; i < LIMITE_POR_EMAIL; i++) {
+      contexto.cabecalhos = { "x-vercel-forwarded-for": `198.51.100.${i + 1}` };
+      await entrar({}, formulario("ana@exemplo.com"));
+    }
+    vi.clearAllMocks();
+    contexto.cabecalhos = { "x-vercel-forwarded-for": "198.51.100.200" };
+    const resposta = await entrar({}, formulario("ana@exemplo.com", SENHA_CERTA));
+    expect(resposta?.erro).toBe(MENSAGEM_RECUSA);
+    expect(senha.verificarSenha).not.toHaveBeenCalled();
+    expect(criarSessao).not.toHaveBeenCalled();
+  });
+
+  it("no login, a recusa pelo IP, pelo e-mail e pela senha errada têm a mesma resposta", async () => {
+    await criarUsuario("ana@exemplo.com");
+    const senhaErrada = await entrar({}, formulario("ana@exemplo.com"));
+
+    for (let i = 1; i < LIMITE_POR_EMAIL; i++) await entrar({}, formulario("ana@exemplo.com"));
+    const porEmail = await entrar({}, formulario("ana@exemplo.com"));
+
+    contexto.cabecalhos = { "x-vercel-forwarded-for": "203.0.113.99" };
+    for (let i = 0; i < LIMITE_POR_IP; i++) await entrar({}, formulario(`outra-${i}@exemplo.com`));
+    const porIp = await entrar({}, formulario("ana@exemplo.com"));
+
+    expect(senhaErrada).toEqual({ erro: MENSAGEM_RECUSA, valores: expect.anything() });
+    expect(porEmail).toEqual(senhaErrada);
+    expect(porIp).toEqual(senhaErrada);
+  });
+
+  it("um login certo zera a contagem do e-mail e abre mais 5 tentativas", async () => {
+    const usuario = await criarUsuario("ana@exemplo.com");
+    let ip = 0;
+    const comOutroIp = () => {
+      contexto.cabecalhos = { "x-vercel-forwarded-for": `198.51.100.${++ip}` };
+    };
+    for (let i = 0; i < LIMITE_POR_EMAIL - 1; i++) {
+      comOutroIp();
+      await entrar({}, formulario("ana@exemplo.com"));
+    }
+    comOutroIp();
+    await expect(entrar({}, formulario("ana@exemplo.com", SENHA_CERTA))).rejects.toThrow("redirecionado");
+    expect(criarSessao).toHaveBeenCalledExactlyOnceWith(usuario.id);
+
+    vi.clearAllMocks();
+    for (let i = 0; i < LIMITE_POR_EMAIL + 1; i++) {
+      comOutroIp();
+      await entrar({}, formulario("ana@exemplo.com"));
+    }
+    expect(senha.verificarSenha).toHaveBeenCalledTimes(LIMITE_POR_EMAIL);
+  });
+
+  it("o banco guarda só o hash do IP e do e-mail", async () => {
+    contexto.cabecalhos = vercel;
+    await entrar({}, formulario("privado@exemplo.com"));
+    const chaves = (await db.tentativaAcesso.findMany()).map((t) => t.chave);
+    expect(chaves).toHaveLength(2);
+    for (const chave of chaves) {
+      expect(chave).toMatch(/^[0-9a-f]{64}$/);
+    }
   });
 });
 
