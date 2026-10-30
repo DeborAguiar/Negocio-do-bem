@@ -237,7 +237,11 @@ describe("renovação durante aprovação com troca do ID do Instagram", () => {
     return { promessa, liberar };
   }
 
-  it.each(["instagram_login", "codigo_dm"] as const)("renova %s sem deadlock na mesma empresa", async (metodo) => {
+  it.each([
+    ["instagram_login", "antes"],
+    ["instagram_login", "depois"],
+    ["codigo_dm", "depois"],
+  ] as const)("renova %s %s da troca do ID sem deadlock na mesma empresa", async (metodo, momento) => {
     const pessoa = await criarUsuario();
     const moderador = await criarUsuario("Moderação");
     const empresa = await criarEmpresa("renovacao", { instagramUserId: "id-anterior" });
@@ -313,8 +317,10 @@ describe("renovação durante aprovação com troca do ID do Instagram", () => {
           conta: { userId: "id-renovado", username: empresa.instagramUsername } })
         : iniciarPorCodigoDm(empresa.id, pessoa.id)]));
       await renovacaoPronta.promessa;
-      continuarAprovacao.liberar();
-      await empresaAlterada.promessa;
+      if (momento === "depois") {
+        continuarAprovacao.liberar();
+        await empresaAlterada.promessa;
+      }
       continuarRenovacao.liberar();
 
       // A aprovação segura Empresa. A renovação deve esperar nela, não segurar o pedido antigo.
@@ -324,6 +330,7 @@ describe("renovação durante aprovação com troca do ID do Instagram", () => {
         return bloqueadores;
       }).toContain(pidAprovacao);
       console.info(`${metodo}: renovação bloqueada pela aprovação, pedido antigo alterado: ${alterouPedido}`);
+      continuarAprovacao.liberar();
       concluirAprovacao.liberar();
       const concluidos = (await Promise.all(resultados)).flat();
       expect(concluidos).toEqual([
