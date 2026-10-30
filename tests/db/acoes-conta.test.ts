@@ -5,8 +5,8 @@ import { LIMITE_POR_EMAIL, LIMITE_POR_IP } from "@/lib/auth/tentativas";
 import { db } from "@/lib/db";
 
 // Estes testes passam pelas ações de verdade (entrar e cadastrar). Só o que
-// precisa de uma requisição do Next fica de mentira: os cabeçalhos, o redirect
-// e o cookie da sessão. O scrypt é o de verdade, com espiões para contar quantas
+// precisa de uma requisição do Next fica de mentira: os cabeçalhos, o redirect,
+// o cookie da sessão e o after (o e-mail de confirmação do cadastro). O scrypt é o de verdade, com espiões para contar quantas
 // vezes ele roda: o limite existe para impedir justamente essas conferências.
 const contexto = vi.hoisted(() => ({
   cabecalhos: {} as Record<string, string>,
@@ -21,6 +21,7 @@ vi.mock("next/navigation", () => ({
     throw new Error("redirecionado");
   },
 }));
+vi.mock("next/server", () => ({ after: () => {} }));
 vi.mock("@/lib/auth/sessao", () => ({ caminhoSeguro: () => "/", criarSessao, encerrarSessao: vi.fn() }));
 vi.mock("@/lib/auth/senha", async (importarOriginal) => {
   const original = await importarOriginal<typeof import("@/lib/auth/senha")>();
