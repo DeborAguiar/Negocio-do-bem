@@ -86,16 +86,25 @@ export async function tentativaDoIpLiberada(ip: string | null): Promise<boolean>
 }
 
 /**
- * Reserva uma tentativa de senha para este e-mail e diz se ela pode seguir: só as 5 primeiras
- * da janela seguem. A reserva é um comando só no banco, feito antes de conferir a senha:
- * conferir primeiro e contar depois deixaria passar todas as tentativas que chegam juntas,
- * cada uma de um IP, antes de a primeira contar. Nada fica preso no banco durante o scrypt.
+ * O contador do e-mail é separado por origem (o IP, ou o /64 no IPv6): quem erra a senha
+ * de outra pessoa de outro lugar não bloqueia a dona da conta. Sem IP confiável, as
+ * tentativas sem IP dividem um contador só por e-mail.
  */
-export async function reservarTentativaDoEmail(email: string): Promise<boolean> {
-  return (await contar(chave("email", email))) <= LIMITE_POR_EMAIL;
+function chaveDoEmail(email: string, ip: string | null): string {
+  return chave("email", `${email} ${ip ?? "ip-desconhecido"}`);
 }
 
-/** O login deu certo: a contagem daquele e-mail volta a zero. */
-export async function zerarTentativasDoEmail(email: string): Promise<void> {
-  await db.tentativaAcesso.deleteMany({ where: { chave: chave("email", email) } });
+/**
+ * Reserva uma tentativa de senha para este e-mail, vinda desta origem, e diz se ela pode
+ * seguir: só as 5 primeiras da janela seguem. A reserva é um comando só no banco, feito
+ * antes de conferir a senha: conferir primeiro e contar depois deixaria passar todas as
+ * tentativas que chegam juntas antes de a primeira contar. Nada fica preso no banco durante o scrypt.
+ */
+export async function reservarTentativaDoEmail(email: string, ip: string | null): Promise<boolean> {
+  return (await contar(chaveDoEmail(email, ip))) <= LIMITE_POR_EMAIL;
+}
+
+/** O login deu certo: a contagem daquele e-mail, naquela origem, volta a zero. */
+export async function zerarTentativasDoEmail(email: string, ip: string | null): Promise<void> {
+  await db.tentativaAcesso.deleteMany({ where: { chave: chaveDoEmail(email, ip) } });
 }

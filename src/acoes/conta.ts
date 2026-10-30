@@ -54,8 +54,8 @@ export async function entrar(_estado: EstadoFormulario, dados: FormData): Promis
   const senha = texto(dados, "senha");
   const recusado = { erro: "E-mail ou senha incorretos.", valores: valoresDoFormulario(dados) };
 
-  // Os dois limites são conferidos, e a tentativa contada, antes do scrypt.
-  if (!(await tentativaDoIpLiberada(await ipDaRequisicao())) || (email && !(await reservarTentativaDoEmail(email)))) {
+  const ip = await ipDaRequisicao();
+  if (!(await tentativaDoIpLiberada(ip)) || (email && !(await reservarTentativaDoEmail(email, ip)))) {
     return recusado;
   }
 
@@ -63,7 +63,7 @@ export async function entrar(_estado: EstadoFormulario, dados: FormData): Promis
   const senhaConfere = await verificarSenha(senha, usuario?.senhaHash ?? (await (hashFalso ??= gerarHashSenha("senha-que-nao-existe"))));
 
   if (!usuario || !senhaConfere) return recusado;
-  await zerarTentativasDoEmail(email);
+  await zerarTentativasDoEmail(email, ip);
   await criarSessao(usuario.id);
   redirect(caminhoSeguro(texto(dados, "voltar")));
 }
