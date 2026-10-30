@@ -684,7 +684,7 @@ Código: `src/acoes/depoimentos.ts`, `decidirDenuncia` em `src/acoes/moderacao.t
 
 ### Denúncias
 
-- **Quem denuncia:** qualquer pessoa logada que **não seja a autora** do depoimento, incluindo o dono do negócio.
+- **Quem denuncia:** qualquer pessoa logada que **não seja a autora** do depoimento, incluindo o dono do negócio. A página esconde o botão para a autora, e a ação também recusa: se ela chamar a ação direto, volta para o perfil sem gravar nada.
 - **Motivo:** opcional, até 300 caracteres. Sem motivo, fica "Sem motivo informado".
 - **Denunciar não esconde o depoimento.** Ele continua no ar até a moderação decidir.
 - **A moderação recebe um e-mail** com o negócio e o link da fila, sem dizer quem denunciou.
