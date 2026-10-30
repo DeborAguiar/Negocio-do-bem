@@ -5,6 +5,7 @@ import { BuscaDiretorio } from "@/components/BuscaDiretorio";
 import { EmpresaCard } from "@/components/EmpresaCard";
 import { EmpresaLinha } from "@/components/EmpresaLinha";
 import { IconeCategoria } from "@/components/IconeCategoria";
+import { Paginacao } from "@/components/Paginacao";
 import { buscarCausa, CAUSAS, GRUPOS, type GrupoCausa } from "@/lib/causas";
 import { buscarDiretorio } from "@/lib/consultas";
 import {
@@ -144,7 +145,7 @@ async function Diretorio({ searchParams }: Pick<PageProps<"/explorar">, "searchP
                 ))}
               </div>
             ) : (
-              <div className="mt-5 grid gap-4 sm:grid-cols-2">
+              <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
                 {resultado.itens.map((empresa) => (
                   <EmpresaCard key={empresa.instagramUsername} empresa={empresa} />
                 ))}
@@ -154,28 +155,7 @@ async function Diretorio({ searchParams }: Pick<PageProps<"/explorar">, "searchP
             <Vazio filtros={filtros} resultado={resultado} />
           )}
 
-          {resultado.paginas > 1 && (
-            <nav aria-label="Paginação" className="mt-8 flex flex-wrap items-center justify-center gap-2">
-              {paginasVisiveis(Math.min(filtros.pagina, resultado.paginas), resultado.paginas).map((pagina, i) =>
-                pagina === null ? (
-                  <span key={`intervalo-${i}`} className="px-1 text-suave" aria-hidden="true">
-                    …
-                  </span>
-                ) : (
-                  <Link
-                    key={pagina}
-                    href={hrefDiretorio({ ...filtros, pagina })}
-                    aria-current={pagina === filtros.pagina ? "page" : undefined}
-                    className={`grid h-10 min-w-10 place-items-center rounded-full border px-3 text-sm font-semibold transition ${
-                      pagina === filtros.pagina ? "border-tinta bg-tinta text-papel" : "border-linha bg-superficie hover:border-tinta/40"
-                    }`}
-                  >
-                    {pagina}
-                  </Link>
-                ),
-              )}
-            </nav>
-          )}
+          <Paginacao atual={filtros.pagina} total={resultado.paginas} href={(pagina) => hrefDiretorio({ ...filtros, pagina })} />
         </div>
       </div>
     </>
@@ -370,14 +350,6 @@ function filtrosAtivos(filtros: FiltrosDiretorio, local: Local | null) {
   return ativos;
 }
 
-/** Números da paginação: todos até 7 páginas; depois, a primeira, a última e as vizinhas da atual. */
-function paginasVisiveis(atual: number, total: number): (number | null)[] {
-  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
-  const perto = [1, atual - 1, atual, atual + 1, total].filter((p) => p >= 1 && p <= total);
-  const unicas = [...new Set(perto)].sort((a, b) => a - b);
-  return unicas.flatMap((p, i) => (i > 0 && p - unicas[i - 1]! > 1 ? [null, p] : [p]));
-}
-
 function IconeFiltros() {
   return (
     <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" aria-hidden="true">
@@ -393,7 +365,7 @@ function DiretorioCarregando() {
       <div className="mt-5 h-[4.5rem] animate-pulse rounded-3xl bg-superficie" />
       <div className="mt-8 flex gap-8">
         <div className="hidden h-[36rem] w-64 shrink-0 animate-pulse rounded-3xl bg-superficie lg:block" />
-        <div className="grid flex-1 gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 flex-1 gap-4 sm:grid-cols-2">
           {Array.from({ length: 6 }, (_, i) => (
             <div key={i} className="h-60 animate-pulse rounded-3xl bg-superficie" />
           ))}

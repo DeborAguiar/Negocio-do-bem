@@ -5,7 +5,7 @@ import { ORDENS, type Ordem } from "@/lib/diretorio";
 export function OrdenarPor({ atual, links }: { atual: Ordem; links: Record<Ordem, string> }) {
   return (
     <div className="inline-flex items-center gap-2 text-sm text-suave">
-      <span id="rotulo-ordenar">Ordenar</span>
+      <span id="rotulo-ordenar" className="max-sm:sr-only">Ordenar</span>
       <details key={atual} className="group relative">
         <summary
           aria-describedby="rotulo-ordenar"
