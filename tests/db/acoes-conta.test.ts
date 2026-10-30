@@ -132,6 +132,30 @@ describe("de onde vem o IP", () => {
   });
 });
 
+describe("IPv6", () => {
+  it("os endereços do mesmo prefixo /64 dividem a cota, mesmo com o IPv6 escrito de jeitos diferentes", async () => {
+    const respostas = await entrarVezes(LIMITE_POR_IP + 2, (i) => ({
+      "x-vercel-forwarded-for": i % 2 ? `2001:db8:abcd:12::${i + 1}` : `2001:0DB8:ABCD:0012:${i + 1}:ffff:ffff:ffff`,
+    }));
+    expect(senha.verificarSenha).toHaveBeenCalledTimes(LIMITE_POR_IP);
+    expect(respostas.map((r) => r?.erro)).toEqual(Array(LIMITE_POR_IP + 2).fill(MENSAGEM_RECUSA));
+    // Outro prefixo /64 tem a cota própria.
+    contexto.cabecalhos = { "x-vercel-forwarded-for": "2001:db8:abcd:13::1" };
+    await entrar({}, formulario("outra-pessoa@exemplo.com"));
+    expect(senha.verificarSenha).toHaveBeenCalledTimes(LIMITE_POR_IP + 1);
+  });
+
+  it("o IPv4 escrito como IPv6 divide a cota com o IPv4", async () => {
+    await entrarVezes(LIMITE_POR_IP + 2, (i) => ({ "x-vercel-forwarded-for": i % 2 ? "::ffff:203.0.113.5" : "203.0.113.5" }));
+    expect(senha.verificarSenha).toHaveBeenCalledTimes(LIMITE_POR_IP);
+  });
+
+  it("o cadastro também divide a cota por prefixo /64", async () => {
+    await cadastrarVezes(LIMITE_POR_IP + 2, (i) => ({ "x-vercel-forwarded-for": `2001:db8:abcd:12::${i + 1}` }));
+    expect(senha.gerarHashSenha).toHaveBeenCalledTimes(LIMITE_POR_IP);
+  });
+});
+
 describe("IP desconhecido", () => {
   it("o cadastro não confere o scrypt sem limite: todos os cadastros sem IP dividem um contador só", async () => {
     const respostas = await cadastrarVezes(LIMITE_POR_IP + 2, () => ({}));

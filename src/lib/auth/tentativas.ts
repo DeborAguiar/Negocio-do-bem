@@ -50,7 +50,29 @@ export function ipDoCabecalho(cabecalhos: Headers): string | null {
   const nome =
     process.env.VERCEL === "1" ? "x-vercel-forwarded-for" : process.env.AUTENTICACAO_PROXY_CONFIAVEL === "1" ? "x-forwarded-for" : null;
   const ip = nome ? cabecalhos.get(nome)?.split(",").at(-1)?.trim() : undefined;
-  return ip && !ip.includes("%") && isIP(ip) ? ip : null;
+  return ip && !ip.includes("%") && isIP(ip) ? normalizarIp(ip) : null;
+}
+
+/**
+ * Dá a mesma forma a endereços que valem como o mesmo visitante, para o contador não se dividir:
+ * - IPv4 escrito como IPv6 (::ffff:203.0.113.5) vira o IPv4 (203.0.113.5);
+ * - IPv6 vira o prefixo /64, porque quem recebe uma rede IPv6 escolhe qualquer
+ *   endereço dela a cada requisição. Cada endereço teria um contador novo.
+ * Recebe só um IP já conferido com `isIP`.
+ */
+export function normalizarIp(ip: string): string {
+  if (isIP(ip) === 4) return ip;
+  // O URL devolve o IPv6 em minúsculas e abreviado, e o IPv4 embutido em hexadecimal.
+  const abreviado = new URL(`http://[${ip}]`).hostname.slice(1, -1);
+  const [antes = "", depois = ""] = abreviado.split("::");
+  const esquerda = antes ? antes.split(":") : [];
+  const direita = depois ? depois.split(":") : [];
+  const zeros = Array<string>(8 - esquerda.length - direita.length).fill("0");
+  const grupos = [...esquerda, ...zeros, ...direita].map((grupo) => parseInt(grupo, 16));
+  if (grupos.slice(0, 5).every((grupo) => grupo === 0) && grupos[5] === 0xffff) {
+    return [grupos[6]! >> 8, grupos[6]! & 255, grupos[7]! >> 8, grupos[7]! & 255].join(".");
+  }
+  return `${grupos.slice(0, 4).map((grupo) => grupo.toString(16)).join(":")}::/64`;
 }
 
 /**

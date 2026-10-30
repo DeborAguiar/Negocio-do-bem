@@ -4,6 +4,7 @@ import {
   JANELA_MS,
   LIMITE_POR_EMAIL,
   LIMITE_POR_IP,
+  normalizarIp,
   registrarFalhaDoEmail,
   tentativaDoIpLiberada,
   zerarTentativasDoEmail,
@@ -57,6 +58,32 @@ describe("limite por IP", () => {
     await tentativaDoIpLiberada("200.0.0.1");
     const [tentativa] = await db.tentativaAcesso.findMany();
     expect(tentativa!.chave).toMatch(/^[0-9a-f]{64}$/);
+  });
+});
+
+describe("normalizarIp", () => {
+  it("deixa o IPv4 como está", () => {
+    expect(normalizarIp("203.0.113.5")).toBe("203.0.113.5");
+  });
+
+  it("troca o IPv4 escrito como IPv6 pelo próprio IPv4", () => {
+    expect(normalizarIp("::ffff:203.0.113.5")).toBe("203.0.113.5");
+    expect(normalizarIp("::FFFF:cb00:7105")).toBe("203.0.113.5");
+    expect(normalizarIp("0:0:0:0:0:ffff:cb00:7105")).toBe("203.0.113.5");
+  });
+
+  it("troca o IPv6 pelo prefixo /64, seja qual for a forma de escrever", () => {
+    const prefixo = "2001:db8:abcd:12::/64";
+    expect(normalizarIp("2001:db8:abcd:12::1")).toBe(prefixo);
+    expect(normalizarIp("2001:0DB8:ABCD:0012:ffff:ffff:ffff:ffff")).toBe(prefixo);
+    expect(normalizarIp("2001:db8:abcd:12:1:2:3:4")).toBe(prefixo);
+    expect(normalizarIp("2001:db8:abcd:13::1")).not.toBe(prefixo);
+  });
+
+  it("aceita os endereços de borda", () => {
+    expect(normalizarIp("::1")).toBe("0:0:0:0::/64");
+    expect(normalizarIp("::")).toBe("0:0:0:0::/64");
+    expect(normalizarIp("fe80::1")).toBe("fe80:0:0:0::/64");
   });
 });
 
