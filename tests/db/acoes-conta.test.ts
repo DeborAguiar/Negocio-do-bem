@@ -78,6 +78,7 @@ async function criarUsuario(email: string) {
 // é calculado antes de todos os testes, para a contagem de gerarHashSenha não
 // depender de qual teste roda primeiro.
 beforeAll(async () => {
+  await db.$executeRawUnsafe(`TRUNCATE "TentativaAcesso", "Usuario" CASCADE`);
   await entrar({}, formulario("aquecer@exemplo.com"));
   await db.$executeRawUnsafe(`TRUNCATE "TentativaAcesso", "Usuario" CASCADE`);
 });
@@ -99,7 +100,7 @@ afterAll(async () => {
 });
 
 describe("de onde vem o IP", () => {
-  it("no Vercel, usa só o x-vercel-forwarded-for e ignora o x-real-ip e o x-forwarded-for que o visitante inventa", async () => {
+  it("no Vercel, usa só o x-vercel-forwarded-for e ignora o x-real-ip e o x-forwarded-for", async () => {
     const respostas = await entrarVezes(LIMITE_POR_IP + 2, (i) => ({
       "x-vercel-forwarded-for": "203.0.113.7",
       "x-real-ip": `198.51.100.${i + 1}`,
