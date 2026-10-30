@@ -31,8 +31,12 @@ export async function cadastrar(_estado: EstadoFormulario, dados: FormData): Pro
   }
   const { nome, email, senha } = resultado.data;
 
-  if (!(await tentativaDoIpLiberada(await ipDaRequisicao()))) {
-    return { erro: "Muitas tentativas seguidas. Espere alguns minutos e tente de novo.", valores: valoresDoFormulario(dados) };
+  const ip = await ipDaRequisicao();
+  if (!(await tentativaDoIpLiberada(ip))) {
+    const erro = ip
+      ? "Muitas tentativas seguidas. Espere alguns minutos e tente de novo."
+      : "Não foi possível criar a conta agora. Tente de novo mais tarde.";
+    return { erro, valores: valoresDoFormulario(dados) };
   }
 
   const existente = await db.usuario.findUnique({ where: { email } });
@@ -55,9 +59,12 @@ export async function entrar(_estado: EstadoFormulario, dados: FormData): Promis
   const recusado = { erro: "E-mail ou senha incorretos.", valores: valoresDoFormulario(dados) };
 
   // Os dois limites são conferidos, e a tentativa contada, antes do scrypt.
-  if (!(await tentativaDoIpLiberada(await ipDaRequisicao())) || (email && !(await reservarTentativaDoEmail(email)))) {
-    return recusado;
+  const ip = await ipDaRequisicao();
+  if (!(await tentativaDoIpLiberada(ip))) {
+    // Sem IP confiável, a recusa não vem de quem tentou entrar, e a mensagem diz isso.
+    return ip ? recusado : { erro: "Não foi possível entrar agora. Tente de novo mais tarde.", valores: valoresDoFormulario(dados) };
   }
+  if (email && !(await reservarTentativaDoEmail(email))) return recusado;
 
   const usuario = email ? await db.usuario.findUnique({ where: { email } }) : null;
   const senhaConfere = await verificarSenha(senha, usuario?.senhaHash ?? (await (hashFalso ??= gerarHashSenha("senha-que-nao-existe"))));
