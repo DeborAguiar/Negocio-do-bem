@@ -1,11 +1,10 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import {
-  emailLiberado,
   JANELA_MS,
   LIMITE_POR_EMAIL,
   LIMITE_POR_IP,
   normalizarIp,
-  registrarFalhaDoEmail,
+  reservarTentativaDoEmail,
   tentativaDoIpLiberada,
   zerarTentativasDoEmail,
 } from "@/lib/auth/tentativas";
@@ -88,36 +87,41 @@ describe("normalizarIp", () => {
 });
 
 describe("limite por e-mail", () => {
-  it("recusa depois de 5 senhas erradas, só para aquele e-mail", async () => {
-    for (let i = 0; i < LIMITE_POR_EMAIL; i++) {
-      expect(await emailLiberado("ana@exemplo.com")).toBe(true);
-      await registrarFalhaDoEmail("ana@exemplo.com");
-    }
-    expect(await emailLiberado("ana@exemplo.com")).toBe(false);
-    expect(await emailLiberado("joao@exemplo.com")).toBe(true);
+  it("libera as 5 primeiras tentativas e recusa da sexta em diante, só para aquele e-mail", async () => {
+    for (let i = 0; i < LIMITE_POR_EMAIL; i++) expect(await reservarTentativaDoEmail("ana@exemplo.com")).toBe(true);
+    expect(await reservarTentativaDoEmail("ana@exemplo.com")).toBe(false);
+    expect(await reservarTentativaDoEmail("ana@exemplo.com")).toBe(false);
+    expect(await reservarTentativaDoEmail("joao@exemplo.com")).toBe(true);
   });
 
   it("um login certo zera a contagem", async () => {
-    for (let i = 0; i < LIMITE_POR_EMAIL - 1; i++) await registrarFalhaDoEmail("ana@exemplo.com");
+    for (let i = 0; i < LIMITE_POR_EMAIL - 1; i++) await reservarTentativaDoEmail("ana@exemplo.com");
     await zerarTentativasDoEmail("ana@exemplo.com");
-    for (let i = 0; i < LIMITE_POR_EMAIL - 1; i++) await registrarFalhaDoEmail("ana@exemplo.com");
-    expect(await emailLiberado("ana@exemplo.com")).toBe(true);
+    for (let i = 0; i < LIMITE_POR_EMAIL - 1; i++) await reservarTentativaDoEmail("ana@exemplo.com");
+    expect(await reservarTentativaDoEmail("ana@exemplo.com")).toBe(true);
   });
 
   it("volta a liberar quando a janela vence", async () => {
-    for (let i = 0; i < LIMITE_POR_EMAIL; i++) await registrarFalhaDoEmail("ana@exemplo.com");
+    for (let i = 0; i <= LIMITE_POR_EMAIL; i++) await reservarTentativaDoEmail("ana@exemplo.com");
     await vencerJanelas();
-    expect(await emailLiberado("ana@exemplo.com")).toBe(true);
-    await registrarFalhaDoEmail("ana@exemplo.com");
+    expect(await reservarTentativaDoEmail("ana@exemplo.com")).toBe(true);
     expect(await db.tentativaAcesso.findFirst()).toMatchObject({ contagem: 1 });
   });
 
-  it("falhas simultâneas logo depois de a janela vencer abrem uma janela só, sem perder nenhuma", async () => {
-    for (let i = 0; i < LIMITE_POR_EMAIL; i++) await registrarFalhaDoEmail("ana@exemplo.com");
+  it("reservas simultâneas logo depois de a janela vencer abrem uma janela só, sem perder nenhuma", async () => {
+    for (let i = 0; i < LIMITE_POR_EMAIL; i++) await reservarTentativaDoEmail("ana@exemplo.com");
     await vencerJanelas();
-    await Promise.all(Array.from({ length: 3 }, () => registrarFalhaDoEmail("ana@exemplo.com")));
+    await Promise.all(Array.from({ length: 3 }, () => reservarTentativaDoEmail("ana@exemplo.com")));
     const tentativa = await db.tentativaAcesso.findFirst();
     expect(tentativa).toMatchObject({ contagem: 3 });
     expect(tentativa!.janelaIniciadaEm.getTime()).toBeGreaterThan(Date.now() - 60_000);
+  });
+
+  it("reservas simultâneas: só as 5 primeiras passam", async () => {
+    const resultados = await Promise.all(
+      Array.from({ length: LIMITE_POR_EMAIL + 19 }, () => reservarTentativaDoEmail("ana@exemplo.com")),
+    );
+    expect(resultados.filter(Boolean)).toHaveLength(LIMITE_POR_EMAIL);
+    expect(await db.tentativaAcesso.findFirst()).toMatchObject({ contagem: LIMITE_POR_EMAIL + 19 });
   });
 });

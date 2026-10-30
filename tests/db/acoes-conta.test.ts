@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cadastrar, entrar } from "@/acoes/conta";
 import * as senha from "@/lib/auth/senha";
-import { LIMITE_POR_IP } from "@/lib/auth/tentativas";
+import { LIMITE_POR_EMAIL, LIMITE_POR_IP } from "@/lib/auth/tentativas";
 import { db } from "@/lib/db";
 
 // Estes testes passam pelas ações de verdade (entrar e cadastrar). Só o que
@@ -129,6 +129,36 @@ describe("de onde vem o IP", () => {
     vi.stubEnv("AUTENTICACAO_PROXY_CONFIAVEL", "1");
     await entrarVezes(LIMITE_POR_IP + 2, (i) => ({ "x-forwarded-for": i % 2 ? `nao-e-ip-${i}` : "" }));
     expect(senha.verificarSenha).toHaveBeenCalledTimes(LIMITE_POR_IP);
+  });
+});
+
+describe("limite por e-mail", () => {
+  async function criarUsuario(email: string) {
+    const usuario = await db.usuario.create({ data: { nome: "Pessoa de teste", email, senhaHash: await senha.gerarHashSenha(SENHA_CERTA) } });
+    vi.clearAllMocks();
+    return usuario;
+  }
+
+  it("só 5 tentativas chegam ao scrypt, mesmo vindas de IPs diferentes", async () => {
+    await criarUsuario("ana@exemplo.com");
+    const respostas = [];
+    for (let i = 0; i < LIMITE_POR_EMAIL + 2; i++) {
+      contexto.cabecalhos = { "x-vercel-forwarded-for": `198.51.100.${i + 1}` };
+      respostas.push(await entrar({}, formulario("ana@exemplo.com")));
+    }
+    expect(senha.verificarSenha).toHaveBeenCalledTimes(LIMITE_POR_EMAIL);
+    expect(respostas.map((r) => r?.erro)).toEqual(Array(LIMITE_POR_EMAIL + 2).fill(MENSAGEM_RECUSA));
+  });
+
+  it("tentativas ao mesmo tempo, de IPs diferentes, também param em 5 no scrypt", async () => {
+    await criarUsuario("ana@exemplo.com");
+    const total = 3 * LIMITE_POR_EMAIL;
+    // Cada chamada pede os cabeçalhos assim que começa, então a fila dá um IP a cada uma.
+    contexto.proximos = Array.from({ length: total }, (_, i) => ({ "x-vercel-forwarded-for": `198.51.100.${i + 1}` }));
+    const respostas = await Promise.all(Array.from({ length: total }, () => entrar({}, formulario("ana@exemplo.com"))));
+    expect(senha.verificarSenha).toHaveBeenCalledTimes(LIMITE_POR_EMAIL);
+    expect(respostas.map((r) => r?.erro)).toEqual(Array(total).fill(MENSAGEM_RECUSA));
+    expect(await db.tentativaAcesso.count({ where: { contagem: total } })).toBe(1);
   });
 });
 

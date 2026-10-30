@@ -85,14 +85,14 @@ export async function tentativaDoIpLiberada(ip: string | null): Promise<boolean>
   return (await contar(ip ? chave("ip", ip) : chave("ip-desconhecido", ""))) <= LIMITE_POR_IP;
 }
 
-/** Se este e-mail ainda pode tentar entrar: menos de 5 senhas erradas na janela. */
-export async function emailLiberado(email: string): Promise<boolean> {
-  const tentativa = await db.tentativaAcesso.findUnique({ where: { chave: chave("email", email) } });
-  return !tentativa || tentativa.janelaIniciadaEm < inicioDaJanela() || tentativa.contagem < LIMITE_POR_EMAIL;
-}
-
-export async function registrarFalhaDoEmail(email: string): Promise<void> {
-  await contar(chave("email", email));
+/**
+ * Reserva uma tentativa de senha para este e-mail e diz se ela pode seguir: só as 5 primeiras
+ * da janela seguem. A reserva é um comando só no banco, feito antes de conferir a senha:
+ * conferir primeiro e contar depois deixaria passar todas as tentativas que chegam juntas,
+ * cada uma de um IP, antes de a primeira contar. Nada fica preso no banco durante o scrypt.
+ */
+export async function reservarTentativaDoEmail(email: string): Promise<boolean> {
+  return (await contar(chave("email", email))) <= LIMITE_POR_EMAIL;
 }
 
 /** O login deu certo: a contagem daquele e-mail volta a zero. */

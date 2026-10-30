@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { gerarHashSenha, verificarSenha } from "@/lib/auth/senha";
 import { caminhoSeguro, criarSessao, encerrarSessao } from "@/lib/auth/sessao";
-import { emailLiberado, ipDoCabecalho, registrarFalhaDoEmail, tentativaDoIpLiberada, zerarTentativasDoEmail } from "@/lib/auth/tentativas";
+import { ipDoCabecalho, reservarTentativaDoEmail, tentativaDoIpLiberada, zerarTentativasDoEmail } from "@/lib/auth/tentativas";
 import { db } from "@/lib/db";
 import { errosPorCampo, texto, valoresDoFormulario, type EstadoFormulario } from "@/lib/formulario";
 
@@ -54,17 +54,15 @@ export async function entrar(_estado: EstadoFormulario, dados: FormData): Promis
   const senha = texto(dados, "senha");
   const recusado = { erro: "E-mail ou senha incorretos.", valores: valoresDoFormulario(dados) };
 
-  if (!(await tentativaDoIpLiberada(await ipDaRequisicao())) || (email && !(await emailLiberado(email)))) {
+  // Os dois limites são conferidos, e a tentativa contada, antes do scrypt.
+  if (!(await tentativaDoIpLiberada(await ipDaRequisicao())) || (email && !(await reservarTentativaDoEmail(email)))) {
     return recusado;
   }
 
   const usuario = email ? await db.usuario.findUnique({ where: { email } }) : null;
   const senhaConfere = await verificarSenha(senha, usuario?.senhaHash ?? (await (hashFalso ??= gerarHashSenha("senha-que-nao-existe"))));
 
-  if (!usuario || !senhaConfere) {
-    if (email) await registrarFalhaDoEmail(email);
-    return recusado;
-  }
+  if (!usuario || !senhaConfere) return recusado;
   await zerarTentativasDoEmail(email);
   await criarSessao(usuario.id);
   redirect(caminhoSeguro(texto(dados, "voltar")));
