@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ORDENS, type Ordem } from "@/lib/diretorio";
 
-/** Seletor de ordenação: um menu com um link para cada ordem, e funciona sem JavaScript. */
+/** Seletor de ordenação: um menu com um link para cada ordem, e funciona antes de o JavaScript carregar. */
 export function OrdenarPor({ atual, links }: { atual: Ordem; links: Record<Ordem, string> }) {
   return (
     <div className="inline-flex items-center gap-2 text-sm text-suave">
