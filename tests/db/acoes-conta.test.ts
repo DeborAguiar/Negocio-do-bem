@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { cadastrar, entrar } from "@/acoes/conta";
 import * as senha from "@/lib/auth/senha";
 import { LIMITE_POR_EMAIL, LIMITE_POR_IP } from "@/lib/auth/tentativas";
@@ -73,6 +73,14 @@ async function criarUsuario(email: string) {
   vi.clearAllMocks();
   return usuario;
 }
+
+// O hash falso do entrar é calculado uma vez só e guardado no módulo. Aqui ele
+// é calculado antes de todos os testes, para a contagem de gerarHashSenha não
+// depender de qual teste roda primeiro.
+beforeAll(async () => {
+  await entrar({}, formulario("aquecer@exemplo.com"));
+  await db.$executeRawUnsafe(`TRUNCATE "TentativaAcesso", "Usuario" CASCADE`);
+});
 
 beforeEach(async () => {
   contexto.cabecalhos = {};

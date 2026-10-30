@@ -50,6 +50,8 @@ npm run db:seed               # dados de exemplo (opcional)
 npm run dev                   # http://localhost:3000
 ```
 
+Sem proxy declarado, o login e o cadastro dividem 10 tentativas a cada 15 minutos no `npm run dev`. Para zerar, apague as linhas da tabela `TentativaAcesso`.
+
 O seed cria negócios fictícios e estas contas, todas com a senha `senha-demo-123`:
 
 | E-mail | Papel |
