@@ -366,6 +366,16 @@ export async function aprovar(params: {
   const { reivindicacaoId, revisorId, modo = "adicionar" } = params;
 
   await db.$transaction(async (tx) => {
+    // Primeira instrução: trava o negócio do pedido. Toda aprovação do mesmo negócio
+    // segue a mesma ordem de travas (negócio, depois pedidos). Sem isso, duas aprovações
+    // de pedidos da mesma pessoa podem travar uma na outra: uma espera o vínculo de dono
+    // que a outra criou e a outra espera o pedido irmão que a primeira marcou (deadlock).
+    const travados = await tx.$queryRaw<{ id: string }[]>`
+      SELECT e.id FROM "Empresa" e
+      WHERE e.id = (SELECT r."empresaId" FROM "Reivindicacao" r WHERE r.id = ${reivindicacaoId})
+      FOR UPDATE OF e`;
+    if (travados.length === 0) throw new ErroReivindicacao("Esta solicitação não está mais pendente.");
+
     const { count } = await tx.reivindicacao.updateMany({
       where: { id: reivindicacaoId, status: "pendente" },
       data: { status: "aprovada", revisadoPorId: revisorId, revisadoEm: new Date() },
